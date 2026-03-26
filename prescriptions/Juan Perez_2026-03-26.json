@@ -1,0 +1,13 @@
+{
+  "medico": "garcia",
+  "paciente": "Juan Perez",
+  "fecha": "2026-03-26",
+  "medicamento": "Amoxicilina",
+  "dosis": "500mg",
+  "cantidad": "21",
+  "instrucciones": "1 cada 8 horas",
+  "estado": "dispensada",
+  "firma_medico": "MEUCICeUq0CRHKwOJtNXy3ygKBtxtspb4Osi7y+ewQfe563uAiEA+wg4DoyJBQenFsO4LjDwlFtsEVVM2nmTCMcYskJn+LU=",
+  "farmaceutico": "lopez",
+  "firma_farmaceutico": "MEYCIQCj3dAlVMuhFnHDFFVp+YYSJPPl5zN88Lj8+rE1WSILdQIhAOZJgzt5nQyzDJRP0ZiKsQ/Go8PrCPvgIqHzlZH2j9p8"
+}
