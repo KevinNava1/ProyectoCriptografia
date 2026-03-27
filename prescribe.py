@@ -4,6 +4,7 @@ Curva: P-256 (SECP256R1) | Hash: SHA-256
 """
 import argparse
 import base64
+import hashlib
 import json
 import os
 from datetime import date
@@ -23,6 +24,13 @@ def crear_receta(medico, paciente, medicamento, dosis, cantidad, instrucciones):
         "estado":        "emitida"
     }
 
+def calcular_hash(receta):
+    """Calcula SHA-256 del contenido de la receta (sin campos de firma ni hash)."""
+    campos = {k: v for k, v in receta.items()
+              if k not in ("firma_medico", "firma_farmaceutico", "hash_sha256")}
+    contenido = json.dumps(campos, sort_keys=True).encode()
+    return hashlib.sha256(contenido).hexdigest()
+
 def firmar_receta(receta, archivo_priv):
     with open(archivo_priv, "rb") as f:
         clave_privada = serialization.load_pem_private_key(
@@ -41,6 +49,7 @@ def guardar(receta_firmada, directorio="prescriptions"):
         json.dump(receta_firmada, f, indent=2, ensure_ascii=False)
     print(f"\n  Receta guardada: {nombre}")
     print(f"  Firma (Base64):  {receta_firmada['firma_medico'][:60]}...")
+    print(f"  SHA-256:         {receta_firmada['hash_sha256']}")
     return nombre
 
 if __name__ == "__main__":
@@ -59,4 +68,5 @@ if __name__ == "__main__":
         args.dosis, args.cantidad, args.instrucciones
     )
     receta_firmada = firmar_receta(receta, args.privkey)
+    receta_firmada["hash_sha256"] = calcular_hash(receta_firmada)
     guardar(receta_firmada)

@@ -35,7 +35,7 @@ def registrar(nombre: str, rol: str, directorio: str = "keys"):
 
     nums = clave_privada.private_numbers()
     print(f"\n  Usuario: {nombre}  |  Rol: {rol}")
-    print(f"  Curva:   P-384 (NIST SECP384R1)")
+    print(f"  Curva:   P-256 (NIST SECP256R1)")
     print(f"  d  = {nums.private_value}")
     print(f"  Qx = {nums.public_numbers.x}")
     print(f"  Qy = {nums.public_numbers.y}")
