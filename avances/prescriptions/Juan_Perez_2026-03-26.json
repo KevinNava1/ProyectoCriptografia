@@ -7,8 +7,8 @@
   "cantidad": "21",
   "instrucciones": "1 cada 8 horas por 7 dias",
   "estado": "dispensada",
-  "firma_medico": "MEUCIA4uLHqnLBbQNPns//4EZSkN8sHcF8PaiPwERV1Q6cHvAiEAq1ZrSS6On8rEPQsBsReQPlPVnnUZZG3/ybxg4YyyJNs=",
+  "firma_medico": "MEUCIQD2TlkA7Bljz3FWKYmGIZOowrMTke2wGOOEN3dcDYHs+wIgYh8d4cCHVCAh3fjxFulMoNgVTU5H03a2/ePUNx1+txQ=",
   "hash_sha256": "9b50285ed371705aa74f97f84f56a7ea2e7b648811530e69c609cde9cb44e5d9",
   "farmaceutico": "lopez",
-  "firma_farmaceutico": "MEYCIQDaGzSBpecPTs10db6F80QAu86EOY/68k72Io/wYM2bWAIhAPRk6JWElaOzT5k5eWqAgvAaGVOGtLGwjNs45oobjwuW"
+  "firma_farmaceutico": "MEYCIQCk44z4N4xMlkaXc+p6W+VqkIGPT7EMaLvZMNF0lVSMxgIhAOk/g1a+ylGoYwG8geGte7Vgf7Iq82NU6XO6H0L9hC4m"
 }
