@@ -60,7 +60,7 @@ export default function MisRecetas() {
               <Pill className="text-[color:var(--cyan)]" /> Mis recetas
             </h1>
             <p className="text-[color:var(--text-secondary)] text-sm mt-2 max-w-xl">
-              Toca "Ver firma" en cada receta para mostrar el hash SHA-256 y la firma ECDSA del médico.
+              Toca "Ver firma" en cada receta para mostrar la huella SHA3-256 y la firma ECDSA P-256 + SHA3-256 del médico.
             </p>
           </div>
           <div className="flex items-center gap-1 glass rounded-xl p-1 self-start sm:self-auto">

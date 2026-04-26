@@ -9,11 +9,11 @@ import StatusChip from '../components/ui/StatusChip'
 import LoadingPulse from '../components/ui/LoadingPulse'
 import EmptyState from '../components/ui/EmptyState'
 import Modal from '../components/ui/Modal'
-import PrivKeyInput from '../components/ui/PrivKeyInput'
+import SessionKeyPicker, { validateKeysBundle } from '../components/ui/SessionKeyPicker'
 import VerificationSteps from '../components/ui/VerificationSteps'
 import { useAuthStore } from '../store/useAuthStore'
 import { recetasAPI } from '../api'
-import { formatDate, isValidPEM } from '../lib/utils'
+import { formatDate } from '../lib/utils'
 
 export default function Pendientes() {
   const user = useAuthStore(s => s.user)
@@ -37,7 +37,8 @@ export default function Pendientes() {
   useEffect(() => { load() }, [])
 
   const dispense = async () => {
-    if (!isValidPEM(key)) return toast.error('Llave privada inválida')
+    const v = validateKeysBundle(key, ['ec', 'rsa'])
+    if (!v.ok) return toast.error(v.reason)
     setPhase('verifying')
     try {
       const { data } = await recetasAPI.dispensar(picked.id, user.id, {
@@ -76,7 +77,7 @@ export default function Pendientes() {
               <ClipboardList className="text-[color:var(--cyan)]" /> Recetas pendientes
             </h1>
             <p className="text-[color:var(--text-secondary)] text-sm mt-2 max-w-xl">
-              Cada dispensado verifica AES-GCM, SHA-256 y la firma ECDSA antes de sellarse con tu firma.
+              Cada dispensado verifica AES-GCM y la firma ECDSA P-256 + SHA3-256 antes de sellarse con tu firma.
             </p>
           </div>
           <span
@@ -125,7 +126,7 @@ export default function Pendientes() {
                         <span className="flex items-center gap-1"><Calendar size={11}/> {formatDate(r.fecha)}</span>
                       </div>
                       <div className="mt-2">
-                        <CryptoHash value={r.hash_sha256} />
+                        <CryptoHash value={r.hash_sha3} />
                       </div>
                     </div>
                   </div>
@@ -156,8 +157,8 @@ export default function Pendientes() {
             </div>
 
             <div>
-              <div className="label-xs mb-1.5">Hash de integridad</div>
-              <CryptoHash value={picked.hash_sha256} full />
+              <div className="label-xs mb-1.5">Huella SHA3-256 (firmada por ECDSA)</div>
+              <CryptoHash value={picked.hash_sha3} full />
             </div>
 
             <div>
@@ -170,11 +171,10 @@ export default function Pendientes() {
               </div>
             </div>
 
-            <PrivKeyInput
-              compact
+            <SessionKeyPicker
+              requires={['ec', 'rsa']}
               value={key}
               onChange={setKey}
-              label="Pega tu llave privada para sellar el dispensado"
             />
 
             {phase !== 'idle' && (

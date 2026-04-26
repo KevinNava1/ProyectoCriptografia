@@ -58,8 +58,8 @@ export default function EcgMonitor({ className = '' }) {
           <g fontFamily="JetBrains Mono, monospace" fill="#0A84FF" fontSize="10">
             <text x="90"  y="80">HR  72 bpm</text>
             <text x="280" y="80">SpO₂ 98%</text>
-            <text x="90"  y="195">SHA-256 · OK</text>
-            <text x="240" y="195">ECDSA P-256 · ✓</text>
+            <text x="90"  y="195">AES-GCM · OK</text>
+            <text x="240" y="195">ECDSA + SHA3 · ✓</text>
           </g>
           {/* buttons */}
           <g fill="#BBD6F2">

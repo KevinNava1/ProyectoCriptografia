@@ -3,7 +3,7 @@ import { Copy, Check } from 'lucide-react'
 import { truncateHash } from '../../lib/utils'
 import { toast } from 'sonner'
 
-export default function CryptoHash({ value, label = 'SHA-256', full = false }) {
+export default function CryptoHash({ value, label = 'SHA3-256', full = false }) {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
     try {

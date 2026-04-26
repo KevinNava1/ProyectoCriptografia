@@ -7,7 +7,10 @@ import Dashboard from './pages/Dashboard'
 import MisRecetas from './pages/MisRecetas'
 import Verificar from './pages/Verificar'
 import NuevaReceta from './pages/NuevaReceta'
+import MisEmitidas from './pages/MisEmitidas'
 import Pendientes from './pages/Pendientes'
+import TicketsDispensacion from './pages/TicketsDispensacion'
+import AdminSolicitudes from './pages/AdminSolicitudes'
 import AppLayout from './components/layout/AppLayout'
 import CursorGlow from './components/ui/CursorGlow'
 import { useAuthStore } from './store/useAuthStore'
@@ -31,7 +34,10 @@ function AnimatedRoutes() {
           <Route path="/mis-recetas" element={<Protected roles={['paciente']}><MisRecetas /></Protected>} />
           <Route path="/verificar"   element={<Protected roles={['paciente']}><Verificar /></Protected>} />
           <Route path="/nueva-receta" element={<Protected roles={['medico']}><NuevaReceta /></Protected>} />
+          <Route path="/mis-emitidas" element={<Protected roles={['medico']}><MisEmitidas /></Protected>} />
           <Route path="/pendientes" element={<Protected roles={['farmaceutico']}><Pendientes /></Protected>} />
+          <Route path="/dispensaciones" element={<Protected roles={['paciente', 'farmaceutico', 'medico']}><TicketsDispensacion /></Protected>} />
+          <Route path="/admin/solicitudes" element={<Protected roles={['admin']}><AdminSolicitudes /></Protected>} />
         </Route>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />

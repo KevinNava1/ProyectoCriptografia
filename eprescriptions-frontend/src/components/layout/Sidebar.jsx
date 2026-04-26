@@ -3,18 +3,27 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Pill, FileSignature, ClipboardList,
-  Activity, ShieldCheck, KeyRound, PanelLeftClose, PanelLeftOpen, X,
+  Activity, ShieldCheck, KeyRound, PanelLeftClose, PanelLeftOpen, X, Stamp,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/useAuthStore'
 
 function linksForRole(role) {
   const base = [{ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, hint: 'Resumen' }]
   if (role === 'paciente') {
-    base.push({ to: '/mis-recetas',  label: 'Mis recetas',      icon: Pill,           hint: 'Recetas activas' })
-    base.push({ to: '/verificar',    label: 'Verificar firmas', icon: KeyRound,       hint: 'ECDSA · AES-GCM' })
+    base.push({ to: '/mis-recetas',     label: 'Mis recetas',      icon: Pill,        hint: 'Recetas activas' })
+    base.push({ to: '/dispensaciones',  label: 'Acuses',           icon: Stamp,       hint: 'Firmar entregas' })
+    base.push({ to: '/verificar',       label: 'Verificar firmas', icon: KeyRound,    hint: 'ECDSA · AES-GCM' })
   }
-  if (role === 'medico')       base.push({ to: '/nueva-receta', label: 'Emitir receta', icon: FileSignature, hint: 'Firmar nueva' })
-  if (role === 'farmaceutico') base.push({ to: '/pendientes',   label: 'Pendientes',    icon: ClipboardList, hint: 'Por dispensar' })
+  if (role === 'medico') {
+    base.push({ to: '/nueva-receta',    label: 'Emitir receta',   icon: FileSignature, hint: 'Firmar nueva' })
+    base.push({ to: '/mis-emitidas',    label: 'Mis emitidas',    icon: ClipboardList, hint: 'Cancelar / sustituir' })
+    base.push({ to: '/dispensaciones',  label: 'Dispensaciones',  icon: Stamp,         hint: 'Histórico (read-only)' })
+  }
+  if (role === 'farmaceutico') {
+    base.push({ to: '/pendientes',      label: 'Pendientes',     icon: ClipboardList, hint: 'Por dispensar' })
+    base.push({ to: '/dispensaciones',  label: 'Dispensaciones', icon: Stamp,         hint: 'Histórico (read-only)' })
+  }
+  if (role === 'admin')        base.push({ to: '/admin/solicitudes', label: 'Solicitudes',  icon: ShieldCheck,   hint: 'Aprobar / rechazar' })
   return base
 }
 
@@ -174,7 +183,7 @@ function SecurityCard({ expanded }) {
               className="text-[10px] text-[color:var(--text-secondary)] leading-relaxed mt-2 overflow-hidden"
             >
               <div className="font-mono">AES-256-GCM</div>
-              <div className="font-mono">ECDSA P-256 · SHA-256</div>
+              <div className="font-mono">ECDSA P-256 + SHA3-256</div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -227,18 +236,6 @@ function SidebarBody({ links, currentPath, expanded, onToggle, onNavigate, showT
               }}
             >
               {expanded ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
-              <AnimatePresence initial={false}>
-                {expanded && (
-                  <motion.span
-                    key="toggle-text"
-                    initial={{ opacity: 0, x: -4 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -4 }}
-                  >
-                    Colapsar
-                  </motion.span>
-                )}
-              </AnimatePresence>
             </button>
           </div>
         )}
@@ -252,8 +249,9 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }) {
   const location = useLocation()
   const links = linksForRole(user?.rol)
 
-  // Rail compacto por defecto; expande con hover o toggle pinneado
-  const [pinned, setPinned] = useState(true)
+  // Por defecto colapsado; el rail se expande mientras el cursor esté encima.
+  // El toggle inferior permite pinnear (mantener expandido) si el usuario lo desea.
+  const [pinned, setPinned] = useState(false)
   const [hovered, setHovered] = useState(false)
   const expanded = pinned || hovered
 

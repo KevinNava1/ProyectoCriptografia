@@ -3,8 +3,7 @@ import { motion } from 'framer-motion'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 
 const DEFAULT_STEPS = [
-  'Verificando integridad SHA-256…',
-  'Verificando firma ECDSA del médico…',
+  'Verificando firma ECDSA P-256 + SHA3-256 del médico…',
   'Sellando con tu firma…',
 ]
 

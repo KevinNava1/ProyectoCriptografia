@@ -64,11 +64,11 @@ export default function RxCard3D({ receta }) {
 
           <div className="space-y-3 flex-1 overflow-auto pr-1">
             <div>
-              <div className="label-xs mb-1">Hash de integridad</div>
-              <CryptoHash value={receta.hash_sha256} full />
+              <div className="label-xs mb-1">Huella SHA3-256 (firmada por ECDSA)</div>
+              <CryptoHash value={receta.hash_sha3} full />
             </div>
             <div>
-              <div className="label-xs mb-1">Firma ECDSA del médico</div>
+              <div className="label-xs mb-1">Firma ECDSA P-256 + SHA3-256 del médico</div>
               <code
                 className="hash-mono text-[9px] block p-2.5 rounded-md"
                 style={{

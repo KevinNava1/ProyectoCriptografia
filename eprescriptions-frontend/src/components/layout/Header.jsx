@@ -7,6 +7,7 @@ const ROLE_STYLES = {
   medico:       { label: 'Médico',       bg: 'rgba(10,132,255,0.10)', border: 'rgba(10,132,255,0.38)', color: '#0052CC' },
   paciente:     { label: 'Paciente',     bg: 'rgba(0,184,217,0.10)',  border: 'rgba(0,184,217,0.38)',  color: '#007A91' },
   farmaceutico: { label: 'Farmacéutico', bg: 'rgba(0,168,112,0.10)',  border: 'rgba(0,168,112,0.38)',  color: '#00775A' },
+  admin:        { label: 'Admin',        bg: 'rgba(132,80,210,0.10)', border: 'rgba(132,80,210,0.38)', color: '#5C2EAD' },
 }
 
 export default function Header({ onOpenMenu }) {

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { AlertTriangle, Copy, Check, ArrowRight, UserPlus, Download, AtSign, KeyRound, Globe } from 'lucide-react'
+import JSZip from 'jszip'
+import { AlertTriangle, ArrowRight, UserPlus, Download, AtSign, KeyRound, Globe, Package, Check } from 'lucide-react'
 import AuroraBackground from '../components/3d/AuroraBackground'
 import VideoBackdrop from '../components/3d/VideoBackdrop'
 import MedicalVortex3D from '../components/3d/MedicalVortex3D'
@@ -11,6 +12,7 @@ import Pill3DOrbit from '../components/3d/Pill3DOrbit'
 import MedicalScene from '../components/illustrations/MedicalScene'
 import { DoctorLogo, PatientLogo, PharmacistLogo } from '../components/illustrations/RoleLogos'
 import PageTransition from '../components/ui/PageTransition'
+import { splitPemBundle } from '../lib/utils'
 import { usuariosAPI } from '../api'
 
 const ROLES = [
@@ -27,9 +29,22 @@ export default function Registro() {
   const [form, setForm] = useState({ username: '', nombre: '', email: '', password: '', rol: 'paciente' })
   const [resp, setResp] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [copiedPub, setCopiedPub] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
+  const [zipping, setZipping] = useState(false)
+  const [downloaded, setDownloaded] = useState({}) // {ec_priv: true, ...}
+
+  // Llaves separadas: si el backend aún no envía los campos partidos,
+  // las extraemos del bundle PEM como fallback.
+  const keys = useMemo(() => {
+    if (!resp) return null
+    const split = splitPemBundle(resp.llave_privada || '')
+    return {
+      ec_priv:  resp.llave_privada_ec  || split.ec  || '',
+      rsa_priv: resp.llave_privada_rsa || split.rsa || '',
+      ec_pub:   resp.llave_publica_ec  || resp.llave_publica || '',
+      rsa_pub:  resp.llave_publica_rsa || '',
+    }
+  }, [resp])
 
   const onChange = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -55,50 +70,54 @@ export default function Registro() {
     } finally { setBusy(false) }
   }
 
-  const copyKey = async () => {
-    if (!resp?.llave_privada) return
-    try {
-      await navigator.clipboard.writeText(resp.llave_privada)
-      setCopied(true)
-      toast.success('Llave privada copiada')
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      toast.error('No se pudo copiar')
-    }
-  }
-
-  const copyPub = async () => {
-    if (!resp?.llave_publica) return
-    try {
-      await navigator.clipboard.writeText(resp.llave_publica)
-      setCopiedPub(true)
-      toast.success('Llave pública copiada')
-      setTimeout(() => setCopiedPub(false), 2000)
-    } catch {
-      toast.error('No se pudo copiar')
-    }
-  }
-
-  const downloadKey = () => {
-    if (!resp?.llave_privada) return
-    const blob = new Blob([resp.llave_privada], { type: 'application/x-pem-file' })
+  const downloadPem = (slot, text, suffix) => {
+    if (!text) return
+    const blob = new Blob([text], { type: 'application/x-pem-file' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `securerx_${resp.username}_private.pem`
+    a.download = `securerx_${resp.username}_${suffix}.pem`
     a.click()
     URL.revokeObjectURL(url)
+    setDownloaded(s => ({ ...s, [slot]: true }))
   }
 
-  const downloadPub = () => {
-    if (!resp?.llave_publica) return
-    const blob = new Blob([resp.llave_publica], { type: 'application/x-pem-file' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `securerx_${resp.username}_public.pem`
-    a.click()
-    URL.revokeObjectURL(url)
+  const downloadAllZip = async () => {
+    if (!keys) return
+    setZipping(true)
+    try {
+      const zip = new JSZip()
+      const folder = zip.folder(`securerx_${resp.username}_keys`)
+      const README =
+`SecureRx — Llaves de @${resp.username}
+Generadas: ${new Date().toISOString()}
+
+Contenido:
+  ec_private.pem   — ECDSA P-256 PRIVADA (firma)        ⚠ NO COMPARTIR
+  rsa_private.pem  — RSA-OAEP 2048 PRIVADA (descifrado) ⚠ NO COMPARTIR
+  ec_public.pem    — ECDSA P-256 pública
+  rsa_public.pem   — RSA-OAEP 2048 pública
+
+Para iniciar sesión sube los dos .pem PRIVADOS en sus campos
+correspondientes. Las públicas ya están registradas en el servidor.
+`
+      folder.file('README.txt', README)
+      if (keys.ec_priv)  folder.file('ec_private.pem',  keys.ec_priv)
+      if (keys.rsa_priv) folder.file('rsa_private.pem', keys.rsa_priv)
+      if (keys.ec_pub)   folder.file('ec_public.pem',   keys.ec_pub)
+      if (keys.rsa_pub)  folder.file('rsa_public.pem',  keys.rsa_pub)
+      const blob = await zip.generateAsync({ type: 'blob' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `securerx_${resp.username}_keys.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+      setDownloaded({ ec_priv: true, rsa_priv: true, ec_pub: true, rsa_pub: true, zip: true })
+      toast.success('ZIP con tus 4 llaves descargado')
+    } catch (err) {
+      toast.error('No se pudo generar el ZIP')
+    } finally { setZipping(false) }
   }
 
   return (
@@ -130,7 +149,7 @@ export default function Registro() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative z-10 w-full max-w-xl"
+          className={`relative z-10 w-full ${step === 2 ? 'max-w-4xl' : 'max-w-xl'}`}
         >
           <div className="secure-card p-6 sm:p-8">
             <StepHeader step={step} />
@@ -247,7 +266,7 @@ export default function Registro() {
                     </p>
                   </div>
 
-                  {resp.llave_privada && (
+                  {keys && (keys.ec_priv || keys.rsa_priv) && (
                     <>
                       <div
                         className="flex items-start gap-3 p-4 rounded-xl"
@@ -255,62 +274,124 @@ export default function Registro() {
                       >
                         <AlertTriangle className="text-[color:var(--amber)] shrink-0 mt-0.5" size={22} />
                         <div className="min-w-0">
-                          <div className="font-heading text-lg text-[color:var(--amber)]">Tu llave privada solo se muestra una vez</div>
+                          <div className="font-heading text-lg text-[color:var(--amber)]">
+                            Tus llaves privadas existen solo en este momento
+                          </div>
                           <p className="text-sm text-[color:var(--text-secondary)] mt-1 leading-relaxed">
-                            Guárdala en un gestor de contraseñas. La necesitarás cada vez que firmes o dispenses.
-                            Si la pierdes, tu cuenta no podrá volver a operar con criptografía. La llave pública
-                            queda registrada en el servidor y puede consultarse en cualquier momento.
+                            Necesitas <strong>ambas</strong> para operar: la <strong>ECDSA</strong> firma tus
+                            recetas / cancelaciones / sellos, y la <strong>RSA-OAEP</strong> descifra los datos
+                            que el sistema envuelve para ti. Descárgalas ahora — el servidor no las almacena
+                            y no podrás recuperarlas.
                           </p>
                         </div>
                       </div>
 
-                      {resp.llave_publica && (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <div className="label-xs flex items-center gap-1.5">
-                              <Globe size={12} className="text-[color:var(--emerald)]" />
-                              Tu llave pública ECDSA (P-256)
-                            </div>
-                            <div className="flex gap-2">
-                              <button type="button" onClick={downloadPub} className="btn btn-ghost btn-sm">
-                                <Download size={12}/> Descargar .pem
-                              </button>
-                              <button type="button" onClick={copyPub} className="btn btn-ghost btn-sm">
-                                {copiedPub ? <><Check size={12}/> Copiado</> : <><Copy size={12}/> Copiar</>}
-                              </button>
-                            </div>
+                      {/* CTA principal — ZIP de las 4 */}
+                      <button
+                        type="button"
+                        onClick={downloadAllZip}
+                        disabled={zipping}
+                        className="w-full p-5 rounded-xl text-left flex items-center gap-4 transition-all hover:shadow-lg disabled:opacity-60"
+                        style={{
+                          background: downloaded.zip
+                            ? 'linear-gradient(135deg, rgba(0,168,112,0.15), rgba(0,184,217,0.10))'
+                            : 'linear-gradient(135deg, rgba(10,132,255,0.15), rgba(0,184,217,0.12))',
+                          border: `1px solid ${downloaded.zip ? 'rgba(0,168,112,0.50)' : 'rgba(10,132,255,0.50)'}`,
+                        }}
+                      >
+                        <div
+                          className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0"
+                          style={{
+                            background: downloaded.zip ? 'rgba(0,168,112,0.20)' : 'rgba(10,132,255,0.20)',
+                            border: `1px solid ${downloaded.zip ? 'rgba(0,168,112,0.55)' : 'rgba(10,132,255,0.55)'}`,
+                          }}
+                        >
+                          <Package size={26} style={{ color: downloaded.zip ? 'var(--emerald)' : 'var(--cyan)' }} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-heading text-lg">
+                            {zipping ? 'Empaquetando…' : 'Descargar las 4 llaves (.zip)'}
                           </div>
-                          <pre className="hash-mono text-[10px] p-4 rounded-lg overflow-auto max-h-56 leading-relaxed whitespace-pre"
-                            style={{ background: 'rgba(0,168,112,0.05)', border: '1px solid rgba(0,168,112,0.28)' }}>
-{resp.llave_publica}
-                          </pre>
-                          <p className="text-[11px] text-[color:var(--text-secondary)] leading-relaxed">
-                            Esta llave se usa para verificar tus firmas. No es secreta: puede compartirse
-                            libremente.
-                          </p>
+                          <div className="text-xs text-[color:var(--text-secondary)] mt-0.5">
+                            Un solo archivo con EC priv + RSA priv + EC pub + RSA pub + README.
+                          </div>
+                        </div>
+                        <Download size={18} className="shrink-0 opacity-70" />
+                      </button>
+
+                      <div className="flex items-center gap-3">
+                        <span className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
+                        <span className="text-[10px] uppercase tracking-wider text-[color:var(--text-secondary)]">
+                          o descarga individual
+                        </span>
+                        <span className="flex-1 h-px" style={{ background: 'var(--border-subtle)' }} />
+                      </div>
+
+                      <div>
+                        <div className="label-xs flex items-center gap-1.5 mb-2">
+                          <KeyRound size={12} className="text-[color:var(--amber)]" />
+                          Privadas — guárdalas en lugar seguro
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <KeyCard
+                            title="ECDSA P-256"
+                            subtitle="firma"
+                            accent="rgba(10,132,255,0.55)"
+                            bg="rgba(10,132,255,0.06)"
+                            icon={KeyRound}
+                            iconColor="var(--cyan)"
+                            done={downloaded.ec_priv}
+                            onDownload={() => downloadPem('ec_priv', keys.ec_priv, 'ec_private')}
+                          />
+                          <KeyCard
+                            title="RSA-OAEP 2048"
+                            subtitle="descifrado"
+                            accent="rgba(0,168,112,0.55)"
+                            bg="rgba(0,168,112,0.06)"
+                            icon={KeyRound}
+                            iconColor="var(--emerald)"
+                            done={downloaded.rsa_priv}
+                            onDownload={() => downloadPem('rsa_priv', keys.rsa_priv, 'rsa_private')}
+                          />
+                        </div>
+                      </div>
+
+                      {(keys.ec_pub || keys.rsa_pub) && (
+                        <div>
+                          <div className="label-xs flex items-center gap-1.5 mb-2">
+                            <Globe size={12} className="text-[color:var(--emerald)]" />
+                            Públicas — opcional, quedan en el servidor
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {keys.ec_pub && (
+                              <KeyCard
+                                title="ECDSA P-256"
+                                subtitle="pública"
+                                accent="rgba(91,107,123,0.45)"
+                                bg="rgba(91,107,123,0.04)"
+                                icon={Globe}
+                                iconColor="var(--text-secondary)"
+                                subdued
+                                done={downloaded.ec_pub}
+                                onDownload={() => downloadPem('ec_pub', keys.ec_pub, 'ec_public')}
+                              />
+                            )}
+                            {keys.rsa_pub && (
+                              <KeyCard
+                                title="RSA-OAEP 2048"
+                                subtitle="pública"
+                                accent="rgba(91,107,123,0.45)"
+                                bg="rgba(91,107,123,0.04)"
+                                icon={Globe}
+                                iconColor="var(--text-secondary)"
+                                subdued
+                                done={downloaded.rsa_pub}
+                                onDownload={() => downloadPem('rsa_pub', keys.rsa_pub, 'rsa_public')}
+                              />
+                            )}
+                          </div>
                         </div>
                       )}
-
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="label-xs flex items-center gap-1.5">
-                            <KeyRound size={12} className="text-[color:var(--amber)]" />
-                            Tu llave privada ECDSA (P-256)
-                          </div>
-                          <div className="flex gap-2">
-                            <button type="button" onClick={downloadKey} className="btn btn-ghost btn-sm">
-                              <Download size={12}/> Descargar .pem
-                            </button>
-                            <button type="button" onClick={copyKey} className="btn btn-ghost btn-sm">
-                              {copied ? <><Check size={12}/> Copiado</> : <><Copy size={12}/> Copiar</>}
-                            </button>
-                          </div>
-                        </div>
-                        <pre className="hash-mono text-[10px] p-4 rounded-lg overflow-auto max-h-64 leading-relaxed whitespace-pre"
-                          style={{ background: 'rgba(10,132,255,0.05)', border: '1px solid rgba(10,132,255,0.25)' }}>
-{resp.llave_privada}
-                        </pre>
-                      </div>
 
                       <label className="flex items-center gap-3 text-sm cursor-pointer p-3 rounded-lg"
                         style={{
@@ -318,16 +399,16 @@ export default function Registro() {
                           border: `1px solid ${confirmed ? 'rgba(0,168,112,0.4)' : 'var(--border-subtle)'}`,
                         }}>
                         <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />
-                        <span>Confirmo que guardé mi llave privada de forma segura</span>
+                        <span>Confirmo que descargué y guardé mis DOS llaves privadas (EC y RSA)</span>
                       </label>
                     </>
                   )}
 
                   <motion.button
-                    disabled={resp.llave_privada && !confirmed}
+                    disabled={keys && (keys.ec_priv || keys.rsa_priv) && !confirmed}
                     onClick={() => nav('/login')}
-                    whileHover={(!resp.llave_privada || confirmed) ? { scale: 1.02 } : undefined}
-                    whileTap={(!resp.llave_privada || confirmed) ? { scale: 0.98 } : undefined}
+                    whileHover={(!keys || (!keys.ec_priv && !keys.rsa_priv) || confirmed) ? { scale: 1.02 } : undefined}
+                    whileTap={(!keys || (!keys.ec_priv && !keys.rsa_priv) || confirmed) ? { scale: 0.98 } : undefined}
                     className="btn btn-primary btn-lg w-full"
                   >
                     Continuar al login <ArrowRight size={16}/>
@@ -351,6 +432,32 @@ function Field({ label, hint, children }) {
       </div>
       {children}
     </div>
+  )
+}
+
+function KeyCard({ title, subtitle, accent, bg, icon: Icon, iconColor, done, onDownload, subdued }) {
+  return (
+    <button
+      type="button"
+      onClick={onDownload}
+      className={`relative w-full text-left rounded-xl p-4 flex items-center gap-3 transition-all hover:translate-y-[-1px] hover:shadow-md ${subdued ? 'opacity-90' : ''}`}
+      style={{ background: bg, border: `1px solid ${accent}` }}
+    >
+      <div
+        className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0"
+        style={{ background: 'rgba(255,255,255,0.55)', border: `1px solid ${accent}` }}
+      >
+        <Icon size={20} style={{ color: iconColor }} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold text-sm truncate">{title}</div>
+        <div className="text-[11px] text-[color:var(--text-secondary)] truncate">{subtitle}</div>
+      </div>
+      <div className="shrink-0 flex items-center gap-1.5 text-[11px] font-medium"
+        style={{ color: done ? 'var(--emerald)' : iconColor }}>
+        {done ? <><Check size={14}/> Descargada</> : <><Download size={14}/> .pem</>}
+      </div>
+    </button>
   )
 }
 

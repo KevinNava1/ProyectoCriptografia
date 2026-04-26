@@ -1,15 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { User, Pill, ShieldCheck, Check, Sparkles, ArrowRight, ArrowLeft, Loader2, FileSignature, AtSign } from 'lucide-react'
+import { User, Pill, ShieldCheck, Check, Sparkles, ArrowRight, ArrowLeft, Loader2, FileSignature, AtSign, Search } from 'lucide-react'
 import PageTransition from '../components/ui/PageTransition'
 import SecureCard from '../components/ui/SecureCard'
-import PrivKeyInput from '../components/ui/PrivKeyInput'
+import SessionKeyPicker, { validateKeysBundle } from '../components/ui/SessionKeyPicker'
 import CryptoHash from '../components/ui/CryptoHash'
 import { useAuthStore } from '../store/useAuthStore'
 import { recetasAPI, usuariosAPI } from '../api'
-import { isValidPEM } from '../lib/utils'
 
 const STEPS = [
   { id: 1, label: 'Paciente' },
@@ -27,29 +26,20 @@ export default function NuevaReceta() {
     dosis: '',
     cantidad: 1,
     instrucciones: '',
-    llave_privada_medico: user?.llave_privada || '',
+    dispensaciones_permitidas: 1,
+    intervalo_dias: '',
+    // Default a la EC del login; el SessionKeyPicker la mantiene viva.
+    llave_privada_medico: user?.llave_privada_ec || user?.llave_privada || '',
   })
   const [pacienteInfo, setPacienteInfo] = useState(null)
-  const [lookingUp, setLookingUp] = useState(false)
   const [result, setResult] = useState(null)
   const [signing, setSigning] = useState(false)
 
   const onChange = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const onBlurPaciente = async () => {
-    const u = form.paciente_username.trim()
-    if (!u) { setPacienteInfo(null); return }
-    setLookingUp(true)
-    try {
-      const { data } = await usuariosAPI.porUsername(u)
-      if (data.rol !== 'paciente') {
-        setPacienteInfo({ error: `@${u} existe pero no es paciente (es ${data.rol})` })
-      } else {
-        setPacienteInfo({ nombre: data.nombre, username: data.username })
-      }
-    } catch (err) {
-      setPacienteInfo({ error: err?.uiMessage || 'Paciente no encontrado' })
-    } finally { setLookingUp(false) }
+  const pickPaciente = (p) => {
+    setForm(f => ({ ...f, paciente_username: p.username }))
+    setPacienteInfo({ nombre: p.nombre, username: p.username })
   }
 
   const canNext =
@@ -58,9 +48,8 @@ export default function NuevaReceta() {
     step === 3
 
   const submit = async () => {
-    if (!isValidPEM(form.llave_privada_medico)) {
-      return toast.error('La llave privada no tiene formato PEM válido')
-    }
+    const v = validateKeysBundle(form.llave_privada_medico, ['ec'])
+    if (!v.ok) return toast.error(v.reason)
     setSigning(true)
     try {
       const { data } = await recetasAPI.crear(user.id, {
@@ -69,6 +58,8 @@ export default function NuevaReceta() {
         dosis: form.dosis,
         cantidad: Number(form.cantidad),
         instrucciones: form.instrucciones,
+        dispensaciones_permitidas: Number(form.dispensaciones_permitidas) || 1,
+        intervalo_dias: form.intervalo_dias === '' ? null : Number(form.intervalo_dias),
         llave_privada_medico: form.llave_privada_medico,
       })
       setResult(data)
@@ -98,38 +89,16 @@ export default function NuevaReceta() {
           <AnimatePresence mode="wait">
             {step === 1 && (
               <StepWrap key="s1">
-                <StepTitle icon={User} title="Paciente" subtitle="Ingresa el nombre de usuario del paciente" />
-                <Field label="Usuario del paciente">
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-[color:var(--text-secondary)]">
-                      <AtSign size={14} />
-                    </div>
-                    <input
-                      value={form.paciente_username}
-                      onChange={e => { onChange('paciente_username', e.target.value); setPacienteInfo(null) }}
-                      onBlur={onBlurPaciente}
-                      className="input-field pl-9"
-                      placeholder="ana.perez"
-                      spellCheck={false}
-                      autoCapitalize="none"
-                    />
-                  </div>
-                </Field>
-                {lookingUp && (
-                  <div className="mt-3 text-xs text-[color:var(--text-secondary)] flex items-center gap-2">
-                    <Loader2 size={12} className="animate-spin" /> Buscando paciente…
-                  </div>
-                )}
-                {!lookingUp && pacienteInfo?.error && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 p-3 rounded-xl text-sm"
-                    style={{ background: 'rgba(180,35,24,0.08)', border: '1px solid rgba(180,35,24,0.35)', color: '#B42318' }}
-                  >
-                    {pacienteInfo.error}
-                  </motion.div>
-                )}
-                {!lookingUp && pacienteInfo && !pacienteInfo.error && (
+                <StepTitle icon={User} title="Paciente" subtitle="Empieza a escribir y selecciona de la lista" />
+                <PacienteTypeahead
+                  value={form.paciente_username}
+                  onChange={(v) => {
+                    onChange('paciente_username', v)
+                    if (!v || (pacienteInfo && pacienteInfo.username !== v)) setPacienteInfo(null)
+                  }}
+                  onPick={pickPaciente}
+                />
+                {pacienteInfo && !pacienteInfo.error && (
                   <motion.div
                     initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
                     className="mt-4 flex items-center gap-3 p-3 rounded-xl"
@@ -159,14 +128,27 @@ export default function NuevaReceta() {
                   <Field label="Dosis">
                     <input value={form.dosis} onChange={e => onChange('dosis', e.target.value)} className="input-field" placeholder="1 cada 8 hrs" />
                   </Field>
-                  <Field label="Cantidad" className="md:col-span-1">
-                    <input type="number" min={1} value={form.cantidad} onChange={e => onChange('cantidad', e.target.value)} className="input-field" />
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                  <Field label="Cantidad">
+                    <input type="number" min={1} value={form.cantidad}
+                      onChange={e => onChange('cantidad', e.target.value)} className="input-field" />
                   </Field>
-                  <div className="md:col-span-2">
-                    <Field label="Instrucciones">
-                      <textarea value={form.instrucciones} onChange={e => onChange('instrucciones', e.target.value)} className="input-field" rows={3} placeholder="Tomar después de alimentos…" />
-                    </Field>
-                  </div>
+                  <Field label="Dispensaciones" hint="cuántas surtidas">
+                    <input type="number" min={1} max={30} value={form.dispensaciones_permitidas}
+                      onChange={e => onChange('dispensaciones_permitidas', e.target.value)} className="input-field" />
+                  </Field>
+                  <Field label="Intervalo (días)" hint="opcional">
+                    <input type="number" min={0} max={365} value={form.intervalo_dias}
+                      onChange={e => onChange('intervalo_dias', e.target.value)} className="input-field" placeholder="—" />
+                  </Field>
+                </div>
+
+                <div className="mt-4">
+                  <Field label="Instrucciones">
+                    <textarea value={form.instrucciones} onChange={e => onChange('instrucciones', e.target.value)} className="input-field" rows={3} placeholder="Tomar después de alimentos…" />
+                  </Field>
                 </div>
               </StepWrap>
             )}
@@ -182,6 +164,8 @@ export default function NuevaReceta() {
                     <SummaryRow label="Medicamento" value={form.medicamento} />
                     <SummaryRow label="Dosis" value={form.dosis} />
                     <SummaryRow label="Cantidad" value={form.cantidad} />
+                    <SummaryRow label="Dispensaciones (= refills)" value={form.dispensaciones_permitidas} />
+                    <SummaryRow label="Intervalo (días)" value={form.intervalo_dias === '' ? 'sin restricción' : form.intervalo_dias} />
                   </div>
                   {form.instrucciones && (
                     <div className="text-xs text-[color:var(--text-secondary)] mt-3 pt-3 border-t border-[var(--border-subtle)] leading-relaxed">
@@ -189,10 +173,10 @@ export default function NuevaReceta() {
                     </div>
                   )}
                 </div>
-                <PrivKeyInput
+                <SessionKeyPicker
+                  requires={['ec']}
                   value={form.llave_privada_medico}
                   onChange={v => onChange('llave_privada_medico', v)}
-                  label="Pega tu llave privada ECDSA para firmar"
                 />
                 <AnimatePresence>
                   {signing && (
@@ -205,9 +189,9 @@ export default function NuevaReceta() {
                     >
                       <Loader2 className="animate-spin text-[color:var(--cyan)] shrink-0" />
                       <div className="min-w-0">
-                        <div className="font-semibold">Firmando con ECDSA P-256…</div>
+                        <div className="font-semibold">Firmando con ECDSA P-256 + SHA3-256…</div>
                         <div className="text-xs text-[color:var(--text-secondary)]">
-                          Calculando hash SHA-256 y cifrando el payload.
+                          ECDSA integra el hash internamente; en paralelo se cifra el payload con AES-256-GCM.
                         </div>
                       </div>
                     </motion.div>
@@ -229,7 +213,7 @@ export default function NuevaReceta() {
                 </motion.div>
                 <h2 className="font-heading text-2xl text-center mt-4 glitch text-[color:var(--emerald)]">Receta firmada</h2>
                 <p className="text-center text-sm text-[color:var(--text-secondary)] mt-2 max-w-md mx-auto">
-                  Cifrada con AES-256-GCM · firmada con ECDSA · integridad verificable con SHA-256.
+                  Cifrada con AES-256-GCM y firmada con ECDSA P-256 + SHA3-256 (hash integrado en la firma).
                 </p>
 
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -239,8 +223,8 @@ export default function NuevaReceta() {
                     <div className="text-xs text-[color:var(--text-secondary)] mt-2">Estado: {result.estado}</div>
                   </SecureCard>
                   <SecureCard hover={false}>
-                    <div className="label-xs mb-2">Integridad</div>
-                    <CryptoHash value={result.hash_sha256} />
+                    <div className="label-xs mb-2">Huella SHA3-256</div>
+                    <CryptoHash value={result.hash_sha3} label="SHA3-256" />
                   </SecureCard>
                 </div>
 
@@ -251,7 +235,10 @@ export default function NuevaReceta() {
                       setStep(1)
                       setResult(null)
                       setPacienteInfo(null)
-                      setForm(f => ({ ...f, paciente_username: '', medicamento: '', dosis: '', cantidad: 1, instrucciones: '' }))
+                      setForm(f => ({ ...f,
+                        paciente_username: '', medicamento: '', dosis: '', cantidad: 1,
+                        instrucciones: '', dispensaciones_permitidas: 1, intervalo_dias: '',
+                      }))
                     }}
                   >
                     <Sparkles size={14}/> Nueva receta
@@ -299,6 +286,143 @@ export default function NuevaReceta() {
         </SecureCard>
       </div>
     </PageTransition>
+  )
+}
+
+function PacienteTypeahead({ value, onChange, onPick }) {
+  const [matches, setMatches] = useState([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [active, setActive] = useState(0)
+  const wrapRef = useRef(null)
+  const inputRef = useRef(null)
+  const lastQ = useRef('')
+
+  // Debounce: dispara la búsqueda 250ms después del último teclazo.
+  useEffect(() => {
+    const q = (value || '').trim()
+    if (q.length === 0) {
+      setMatches([]); setError(null); setOpen(false); return
+    }
+    setLoading(true)
+    const t = setTimeout(async () => {
+      lastQ.current = q
+      try {
+        const { data } = await usuariosAPI.buscar(q, 'paciente')
+        if (lastQ.current !== q) return  // resultado obsoleto
+        setMatches(data || [])
+        setOpen(true)
+        setActive(0)
+        setError((data || []).length === 0 ? 'Sin coincidencias' : null)
+      } catch (err) {
+        setError(err?.uiMessage || 'No se pudo buscar')
+        setMatches([])
+        setOpen(true)
+      } finally { setLoading(false) }
+    }, 250)
+    return () => clearTimeout(t)
+  }, [value])
+
+  // Cierra el dropdown si haces click fuera.
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  const choose = (p) => {
+    onPick(p)
+    setOpen(false)
+    setMatches([])
+    inputRef.current?.blur()
+  }
+
+  const onKeyDown = (e) => {
+    if (!open || matches.length === 0) return
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive(i => Math.min(i + 1, matches.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(i => Math.max(i - 1, 0)) }
+    else if (e.key === 'Enter') { e.preventDefault(); choose(matches[active]) }
+    else if (e.key === 'Escape') { setOpen(false) }
+  }
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <div className="label-xs mb-1.5">Paciente</div>
+      <div className="relative">
+        <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-[color:var(--text-secondary)]">
+          {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+        </div>
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onFocus={() => { if (matches.length > 0) setOpen(true) }}
+          onKeyDown={onKeyDown}
+          className="input-field pl-9"
+          placeholder="escribe nombre o usuario…"
+          spellCheck={false}
+          autoCapitalize="none"
+          autoComplete="off"
+        />
+      </div>
+      <AnimatePresence>
+        {open && (matches.length > 0 || error) && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.12 }}
+            className="absolute z-30 left-0 right-0 mt-1 rounded-xl overflow-hidden"
+            style={{
+              background: 'rgba(255,255,255,0.96)',
+              backdropFilter: 'blur(14px) saturate(1.15)',
+              border: '1px solid var(--border-subtle)',
+              boxShadow: '0 12px 36px rgba(10,36,67,0.14)',
+              maxHeight: 280,
+              overflowY: 'auto',
+            }}
+            role="listbox"
+          >
+            {matches.length === 0 && error && (
+              <div className="px-3 py-2.5 text-[11px] text-[color:var(--text-secondary)]">{error}</div>
+            )}
+            {matches.map((p, i) => {
+              const isActive = i === active
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="option"
+                  aria-selected={isActive}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => choose(p)}
+                  onMouseEnter={() => setActive(i)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors"
+                  style={{
+                    background: isActive ? 'rgba(10,132,255,0.10)' : 'transparent',
+                    borderBottom: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ background: 'rgba(10,132,255,0.10)', border: '1px solid rgba(10,132,255,0.30)' }}>
+                    <User size={14} className="text-[color:var(--cyan)]" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium truncate">{p.nombre}</div>
+                    <div className="text-[11px] font-mono text-[color:var(--text-secondary)] truncate">@{p.username}</div>
+                  </div>
+                  {isActive && <Check size={14} className="text-[color:var(--cyan)] shrink-0" />}
+                </button>
+              )
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }
 

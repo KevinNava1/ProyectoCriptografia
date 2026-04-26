@@ -7,9 +7,17 @@ export const useAuthStore = create(
       user: null,
       login: (user) => set({ user }),
       logout: () => set({ user: null }),
-      clearKey: () => set({ user: { ...get().user, llave_privada: null } }),
+      clearKey: () => set({
+        user: {
+          ...get().user,
+          llave_privada: null,
+          llave_privada_ec: null,
+          llave_privada_rsa: null,
+        },
+      }),
       isLoggedIn: () => !!get().user,
       role: () => get().user?.rol,
+      token: () => get().user?.token || null,
     }),
     {
       name: 'eprescriptions-auth',

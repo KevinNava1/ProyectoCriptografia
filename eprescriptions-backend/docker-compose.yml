@@ -1,0 +1,52 @@
+# Desarrollo local: backend + MySQL 8. Para producción cambia passwords y
+# apunta el backend a un MySQL administrado.
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-changeme}
+      MYSQL_DATABASE: ${DB_NAME:-securerx}
+      MYSQL_USER: ${DB_USER:-rxuser}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-changeme}
+    command:
+      [
+        "--default-authentication-plugin=caching_sha2_password",
+        "--character-set-server=utf8mb4",
+        "--collation-server=utf8mb4_unicode_ci",
+      ]
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-changeme}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_USER: ${DB_USER:-rxuser}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      DB_NAME: ${DB_NAME:-securerx}
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-prod}
+      CA_DIR: /app/ca
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_NOMBRE: ${ADMIN_NOMBRE:-Administrador}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@securerx.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    volumes:
+      - ca-data:/app/ca
+    ports:
+      - "8000:8000"
+
+volumes:
+  dbdata:
+  ca-data:

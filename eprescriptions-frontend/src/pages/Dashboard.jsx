@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { FileSignature, ClipboardList, Pill, ShieldCheck, Sparkles, Activity, AtSign } from 'lucide-react'
 import PageTransition from '../components/ui/PageTransition'
@@ -21,12 +21,18 @@ const item = {
 
 export default function Dashboard() {
   const user = useAuthStore(s => s.user)
+  const nav = useNavigate()
   const [recetas, setRecetas] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // Admin no opera con recetas — su panel propio vive en /admin/solicitudes.
   useEffect(() => {
-    if (!user) return
+    if (user?.rol === 'admin') nav('/admin/solicitudes', { replace: true })
+  }, [user, nav])
+
+  useEffect(() => {
+    if (!user || user.rol === 'admin') return
     let cancelled = false
     const load = async () => {
       setLoading(true)
@@ -163,7 +169,7 @@ export default function Dashboard() {
               <div className="label-xs flex items-center gap-1.5"><Activity size={11}/> Salud del sistema</div>
               <div className="font-heading text-xl mt-2">Pulso criptográfico</div>
               <p className="text-xs text-[color:var(--text-secondary)] leading-relaxed mt-2">
-                Validación continua de integridad SHA-256, firma ECDSA P-256 y cifrado AES-256-GCM.
+                Validación continua: firma ECDSA P-256 + SHA3-256 (hash interno) y cifrado AES-256-GCM autenticado.
               </p>
             </div>
             <div className="flex-1 relative min-h-[180px]">
@@ -224,7 +230,7 @@ function CryptoStatus() {
           <span className="font-heading text-base sm:text-lg">Sistema seguro</span>
         </div>
         <div className="text-[10px] text-[color:var(--text-secondary)] mt-1 tracking-wide">
-          AES-256-GCM · ECDSA P-256 · SHA-256
+          AES-256-GCM · ECDSA P-256 + SHA3-256
         </div>
       </div>
     </SecureCard>

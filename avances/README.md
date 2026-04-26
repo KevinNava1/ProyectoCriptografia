@@ -1,2 +1,0 @@
-# ProyectoCriptografia
-Secure e-prescriptions
