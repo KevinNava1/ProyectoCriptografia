@@ -1,10 +1,4 @@
-"""§4 — Creación de una receta electrónica.
-
-Orquestación:
-    validar RBAC/ownership → construir R canónico → firmar con ECDSA-SHA3 →
-    cifrar con AES-256-GCM → envolver DEK para paciente y farmacias activas →
-    persistir + auditar. Toda la criptografía vive en `services/`.
-"""
+"""§4 — Creación de receta: firma ECDSA del médico + cifrado AES-GCM + wrap RSA-OAEP."""
 from __future__ import annotations
 
 from datetime import date
@@ -18,6 +12,7 @@ from database import Receta, RecetaAccesoFarmacia, Usuario, get_db
 from schemas.recetas import RecetaInput, RecetaOutput
 from services import bundle, canonical_receta, receta_cifrado
 from services.crypto import ecdsa_sign
+from services.crypto.crypto_log import banner_flow, step
 from services.estados import to_legacy
 
 router = APIRouter(prefix="/recetas", tags=["recetas"])
@@ -30,11 +25,14 @@ def crear_receta(
     user: Usuario = Depends(require_roles("medico")),
     db: Session = Depends(get_db),
 ):
-    # RBAC duro: el id del query tiene que coincidir con el JWT (anti-IDOR).
+    banner_flow("§4 CREAR RECETA",
+                "Médico firma R con ECDSA y cifra con AES-GCM; DEK envuelta vía RSA-OAEP")
+
+    # Anti-IDOR: el query param tiene que coincidir con el JWT.
     if medico_id != user.id:
         raise HTTPException(403, "medico_id no coincide con la sesión")
 
-    # La llave EC del bundle debe derivar a la pub_ec_pem del médico.
+    step("§4 CREAR", 0, "validar pertenencia de la llave EC del médico")
     ec_priv = bundle.exigir_ec(datos.llave_privada_medico, user.pub_ec_pem)
 
     paciente = db.query(Usuario).filter(
@@ -46,7 +44,6 @@ def crear_receta(
     if not paciente.pub_rsa_pem:
         raise HTTPException(400, "El paciente no tiene llave RSA pública registrada")
 
-    # Todas las farmacias activas → cada una recibe su C_wrap_far.
     farmacias = db.query(Usuario).filter(
         Usuario.rol == "farmaceutico",
         Usuario.estado == "activo",
@@ -55,7 +52,8 @@ def crear_receta(
     if not farmacias:
         raise HTTPException(503, "No hay farmacias activas para recibir la receta")
 
-    # Placeholder para obtener el id_receta (se necesita DENTRO de R y AAD).
+    # Necesitamos el id_receta antes de construir R y AAD, así que insertamos
+    # un placeholder y lo completamos después del cifrado.
     placeholder = Receta(
         medico_id=user.id, paciente_id=paciente.id,
         ciphertext=b"\x00", tag_aes=b"\x00" * 16, iv_aes=b"\x00" * 12,
@@ -67,49 +65,47 @@ def crear_receta(
     db.add(placeholder)
     db.flush()
     id_receta = placeholder.id
-    fecha_creacion = date.today().isoformat()
+    fecha = date.today().isoformat()
 
-    # §4.1 — R canónico.
+    step("§4 CREAR", 1, "serializar R canónico")
     r_bytes = canonical_receta.build_R(
         id_receta=id_receta, id_doctor=user.id, id_paciente=paciente.id,
         medicamento=datos.medicamento, dosis=datos.dosis, cantidad=datos.cantidad,
-        indicaciones=datos.instrucciones, fecha_creacion=fecha_creacion,
+        indicaciones=datos.instrucciones, fecha_creacion=fecha,
         dispensaciones_permitidas=datos.dispensaciones_permitidas,
         intervalo_dias=datos.intervalo_dias, parent_id=None,
     )
 
-    # §4.2 — S_D = ECDSA-SHA3(priv_ec_doctor, R).
+    step("§4 CREAR", 2, "FIRMAR R con ECDSA P-256 + SHA3-256 → S_D")
     firma_doctor = ecdsa_sign(ec_priv, r_bytes)
 
-    # §4.4 — AAD canónico.
+    step("§4 CREAR", 3, "construir AAD canónico")
     aad = canonical_receta.build_AAD(
         id_receta=id_receta, id_doctor=user.id, id_paciente=paciente.id,
-        fecha_creacion=fecha_creacion,
+        fecha_creacion=fecha,
         dispensaciones_permitidas=datos.dispensaciones_permitidas,
     )
 
-    # §4.3–§4.7 — cifrar una vez y envolver DEK para paciente + cada farmacia.
+    step("§4 CREAR", 4, f"cifrar R + envolver DEK (paciente + {sum(1 for f in farmacias if f.pub_rsa_pem)} farmacia(s))")
     env = receta_cifrado.cifrar_y_envolver(
         r_bytes, aad, paciente.pub_rsa_pem,
         [(f.id, f.pub_rsa_pem) for f in farmacias if f.pub_rsa_pem],
     )
 
-    # §4.8 — completar la receta con los bytes cifrados.
+    step("§4 CREAR", 5, "persistir ciphertext + tag + iv + aad + firma + hash")
     placeholder.ciphertext = env.ciphertext
-    placeholder.tag_aes = env.tag
-    placeholder.iv_aes = env.iv
-    placeholder.aad = aad
+    placeholder.tag_aes    = env.tag
+    placeholder.iv_aes     = env.iv
+    placeholder.aad        = aad
     placeholder.c_wrap_pac = env.c_wrap_pac
-    placeholder.firma_doctor = firma_doctor
+    placeholder.firma_doctor  = firma_doctor
     placeholder.hash_sha3_hex = canonical_receta.sha3_hex(r_bytes)
 
-    # §4.9 — una fila por farmacia autorizada.
     for farm_id, c_wrap_far in env.c_wraps_far:
         db.add(RecetaAccesoFarmacia(
             receta_id=id_receta, farmacia_id=farm_id, c_wrap_far=c_wrap_far,
         ))
 
-    # §4.11 — audit.
     audit_log(
         db, usuario_id=user.id, accion="creacion_receta", id_receta=id_receta,
         metadata={

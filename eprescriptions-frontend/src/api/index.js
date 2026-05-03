@@ -29,6 +29,24 @@ api.interceptors.response.use(
     const status = err?.response?.status
     const detail = err?.response?.data?.detail || err?.response?.data?.message
     const message = typeof detail === 'string' ? detail : err?.message
+
+    if (status === 401 && /falta cabecera x-priv-keys/i.test(message || '')) {
+      // Solo hacemos logout si el usuario no tiene llaves en memoria
+      // (caso: recarga de página con token persistido pero sin PEM).
+      // Si las llaves SÍ están en memoria, dejamos el error llegar al componente.
+      const hasKeys = !!useAuthStore.getState().user?.llave_privada
+      if (!hasKeys) {
+        useAuthStore.getState().logout()
+        // Protected() detectará user===null y redirigirá a /login sin recarga forzada.
+      }
+      err.uiMessage = 'Para acceder necesitas iniciar sesión con tus llaves privadas.'
+      return Promise.reject(err)
+    }
+
+    if (status === 401 && /sesión expirada|token inv[áa]lido/i.test(message || '')) {
+      useAuthStore.getState().logout()
+    }
+
     err.uiMessage = translateError(status, message)
     return Promise.reject(err)
   }
@@ -58,10 +76,14 @@ function translateError(status, message) {
 }
 
 export const usuariosAPI = {
-  registrar: (datos)   => api.post('/usuarios/registro', datos),
-  login:     (datos)   => api.post('/usuarios/login', datos),
-  porUsername: (u)     => api.get(`/usuarios/${encodeURIComponent(u)}`),
-  buscar:    (q, rol)  => api.get(`/usuarios/buscar`, { params: { q, rol } }),
+  registrar:           (datos)    => api.post('/usuarios/registro', datos),
+  login:               (datos)    => api.post('/usuarios/login', datos),
+  porUsername:         (u)        => api.get(`/usuarios/${encodeURIComponent(u)}`),
+  buscar:              (q, rol)   => api.get(`/usuarios/buscar`, { params: { q, rol } }),
+  verificarEmail:      (token)    => api.get('/usuarios/verificar-email', { params: { token } }),
+  reenviarVerificacion:(email, username) => api.post('/usuarios/reenviar-verificacion', { email, username }),
+  recuperarPassword:   (email)    => api.post('/usuarios/recuperar-password', { email }),
+  resetPassword:       (token, nueva_password) => api.post('/usuarios/reset-password', { token, nueva_password }),
 }
 
 const withKeys = { attachPrivKeys: true }

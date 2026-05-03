@@ -334,6 +334,15 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
 }
 .flip-back { transform: rotateY(180deg); }
 
+/* Dentro del flip las caras deben ser opacas: backdrop-filter dentro de un
+   contexto 3D captura lo que hay detrás de toda la tarjeta y se trasluce,
+   haciendo visible el contenido ajeno a la tarjeta durante y después del giro. */
+.flip-card .flip-face.secure-card {
+  background: rgb(245, 249, 255);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 /* ─────────── Grid background ─────────── */
 .grid-bg {
   background-image:

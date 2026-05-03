@@ -45,7 +45,6 @@ export default function Pendientes() {
         llave_privada_farmaceutico: key,
       })
       const ok = Object.values(data?.verificaciones || {}).every(Boolean)
-      await new Promise(r => setTimeout(r, 2200))
       if (!ok) throw new Error('Alguna verificación falló')
       setPhase('success')
       toast.success(`Receta #${data.receta_id} dispensada`)

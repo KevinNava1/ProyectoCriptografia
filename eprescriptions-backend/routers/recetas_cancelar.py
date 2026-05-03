@@ -1,10 +1,4 @@
-"""§8 — Cancelación de una receta.
-
-Solo el doctor emisor puede cancelar, y solo si el estado es
-`activa` o `en_proceso`. Una receta `dispensada_completa` NO es cancelable.
-La cancelación genera un `M_cancel` firmado (S_cancel) que queda como prueba
-criptográfica inmutable en la tabla `cancelaciones`.
-"""
+"""§8 — Cancelación de receta: genera M_cancel firmado con ECDSA del médico."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -18,6 +12,7 @@ from database import Cancelacion, Receta, Usuario, get_db
 from schemas.recetas import CancelarInput
 from services import bundle, canonical_receta
 from services.crypto import ecdsa_sign
+from services.crypto.crypto_log import banner_flow, step
 from services.estados import es_cancelable, to_legacy
 
 router = APIRouter(prefix="/recetas", tags=["recetas"])
@@ -38,10 +33,12 @@ def cancelar_receta(
     if not es_cancelable(r.estado):
         raise HTTPException(400, f"Una receta en estado '{to_legacy(r.estado)}' no se puede cancelar")
 
-    # Valida pertenencia de la llave EC del bundle.
+    banner_flow("§8 CANCELAR", "Médico construye M_cancel canónico y lo firma con ECDSA")
+
+    step("§8 CANCELAR", 0, "validar pertenencia de la priv EC del médico")
     ec_priv = bundle.exigir_ec(datos.llave_privada_medico, user.pub_ec_pem)
 
-    # §8.2 — construir M_cancel.
+    step("§8 CANCELAR", 1, "construir M_cancel canónico")
     ts = datetime.now(timezone.utc)
     m_bytes = canonical_receta.build_M_cancel(
         id_receta=r.id, id_doctor=user.id,
@@ -49,22 +46,19 @@ def cancelar_receta(
         dispensaciones_realizadas_al_cancelar=r.dispensaciones_realizadas,
     )
 
-    # §8.3 — firmar con ECDSA-SHA3.
+    step("§8 CANCELAR", 2, "ECDSA sign → S_cancel sobre M_cancel")
     s_cancel = ecdsa_sign(ec_priv, m_bytes)
 
-    # §8.4 — actualizar receta.
     r.estado = "cancelada"
     r.motivo_cancelacion = datos.motivo
-    r.fecha_cancelacion = ts
+    r.fecha_cancelacion  = ts
 
-    # §8.5 — persistir cancelación.
     db.add(Cancelacion(
         receta_id=r.id, doctor_id=user.id,
         manifiesto=m_bytes, firma_cancel=s_cancel,
         timestamp_cancel=ts, motivo=datos.motivo,
     ))
 
-    # §8.6 — audit.
     audit_log(
         db, usuario_id=user.id, accion="cancelacion_receta", id_receta=r.id,
         metadata={"motivo": datos.motivo,

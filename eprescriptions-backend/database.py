@@ -28,7 +28,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from sqlalchemy.sql import func
 
-load_dotenv()
+load_dotenv(override=True)
 
 _URL = (
     f"mysql+pymysql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}"
@@ -86,6 +86,11 @@ class Usuario(Base):
 
     fecha_registro = Column(DateTime(timezone=True), server_default=func.now())
     activo = Column(Boolean, default=True, nullable=False)
+
+    email_verificado   = Column(Boolean, default=False, nullable=False)
+    token_verificacion = Column(String(64), nullable=True, index=True)
+    token_reset_pw     = Column(String(64), nullable=True, index=True)
+    token_reset_exp    = Column(DateTime(timezone=True), nullable=True)
 
     certificados = relationship("Certificado", back_populates="usuario", cascade="all, delete-orphan")
 
@@ -155,7 +160,7 @@ class Receta(Base):
     medico_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False, index=True)
     paciente_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False, index=True)
 
-    # AES-256-GCM
+    # AES-128-GCM
     ciphertext = Column(LargeBinary, nullable=False)
     tag_aes = Column(LargeBinary(16), nullable=False)
     iv_aes = Column(LargeBinary(12), nullable=False)

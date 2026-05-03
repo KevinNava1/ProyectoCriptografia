@@ -11,7 +11,6 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD:-changeme}
     command:
       [
-        "--default-authentication-plugin=caching_sha2_password",
         "--character-set-server=utf8mb4",
         "--collation-server=utf8mb4_unicode_ci",
       ]
@@ -37,15 +36,30 @@ services:
       DB_NAME: ${DB_NAME:-securerx}
       JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-prod}
       CA_DIR: /app/ca
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost,http://localhost:5173}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_NOMBRE: ${ADMIN_NOMBRE:-Administrador}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@securerx.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     volumes:
       - ca-data:/app/ca
+    # SIN ports: el api ya no se expone al host. Solo nginx (443) habla con él
+    # por la red interna de docker-compose.
+    expose:
+      - "8000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
     ports:
-      - "8000:8000"
+      # mapeamos el listener HTTP de nginx (solo redirect → HTTPS) al 8080.
+      - "8080:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
 
 volumes:
   dbdata:

@@ -10,3 +10,4 @@ from .aes_gcm import aes_gcm_encrypt, aes_gcm_decrypt, new_dek, new_iv
 from .rsa_oaep import rsa_oaep_encrypt, rsa_oaep_decrypt
 from .argon2_pw import hash_password, verify_password
 from .jwt_service import sign_jwt, verify_jwt
+from . import crypto_log  # noqa: F401  — exposición opcional para depuración

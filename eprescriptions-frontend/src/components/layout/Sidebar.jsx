@@ -182,7 +182,7 @@ function SecurityCard({ expanded }) {
               exit={{ opacity: 0, height: 0 }}
               className="text-[10px] text-[color:var(--text-secondary)] leading-relaxed mt-2 overflow-hidden"
             >
-              <div className="font-mono">AES-256-GCM</div>
+              <div className="font-mono">AES-128-GCM</div>
               <div className="font-mono">ECDSA P-256 + SHA3-256</div>
             </motion.div>
           )}

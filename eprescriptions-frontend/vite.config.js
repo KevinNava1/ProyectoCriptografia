@@ -12,9 +12,13 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      // Fallback: cuando VITE_API_URL no está seteado, las requests a /api/*
+      // se reenvían al nginx (TLS 1.3) corriendo en https://localhost.
+      // `secure: false` acepta el cert auto-firmado del nginx local.
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'https://localhost',
         changeOrigin: true,
+        secure: false,
         rewrite: (path) => path.replace(/^\/api/, '')
       }
     }

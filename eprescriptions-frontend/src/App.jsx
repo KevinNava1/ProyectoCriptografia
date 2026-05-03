@@ -3,6 +3,8 @@ import { AnimatePresence } from 'framer-motion'
 import { Toaster } from 'sonner'
 import Login from './pages/Login'
 import Registro from './pages/Registro'
+import VerificarEmail from './pages/VerificarEmail'
+import RecuperarPassword from './pages/RecuperarPassword'
 import Dashboard from './pages/Dashboard'
 import MisRecetas from './pages/MisRecetas'
 import Verificar from './pages/Verificar'
@@ -29,6 +31,8 @@ function AnimatedRoutes() {
       <Routes location={location} key={location.pathname}>
         <Route path="/login" element={<Login />} />
         <Route path="/registro" element={<Registro />} />
+        <Route path="/verificar-email" element={<VerificarEmail />} />
+        <Route path="/recuperar-password" element={<RecuperarPassword />} />
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
           <Route path="/mis-recetas" element={<Protected roles={['paciente']}><MisRecetas /></Protected>} />

@@ -1,17 +1,4 @@
-"""Manejo de bundles PEM (EC + RSA) que los usuarios envían en su request.
-
-El bundle es la concatenación textual de los dos bloques PEM privados (EC
-primero, RSA después) emitidos durante el registro. Este módulo encapsula:
-
-- parseo del bundle
-- serialización a PEM
-- verificación de que la llave privada pertenece al usuario autenticado
-- decodificación del header `X-Priv-Keys` (que viaja base64 porque los headers
-  HTTP no admiten CR/LF)
-
-Ninguna llave privada cruza la frontera de este módulo en plano más de lo
-necesario y NADA se persiste.
-"""
+"""Manejo del bundle PEM (EC + RSA) que los clientes envían en X-Priv-Keys."""
 from __future__ import annotations
 
 import base64
@@ -32,7 +19,7 @@ def _priv_to_pem(priv) -> str:
 
 
 def abrir(bundle_pem: str):
-    """Devuelve (ec_priv, rsa_priv) — cualquiera de los dos puede ser None."""
+    """Devuelve (ec_priv, rsa_priv) — cualquiera puede ser None."""
     return parse_pem_bundle(bundle_pem)
 
 
@@ -44,34 +31,34 @@ def priv_rsa_pem(rsa_priv) -> str:
     return _priv_to_pem(rsa_priv)
 
 
-def exigir_ec(bundle_pem: str, pub_ec_pem_registrada: str | None):
-    """Extrae la EC del bundle y confirma que pertenece al usuario."""
+def exigir_ec(bundle_pem: str, pub_ec_registrada: str | None):
+    """Extrae la EC del bundle y verifica que pertenece al usuario (priv → pub derivada == pub en BD)."""
     ec_priv, _ = parse_pem_bundle(bundle_pem)
     if ec_priv is None:
         raise HTTPException(400, "Falta la llave EC privada en el bundle")
-    if not pub_ec_pem_registrada:
+    if not pub_ec_registrada:
         raise HTTPException(403, "Usuario sin llave EC pública registrada")
-    if pub_pem_from_priv(_priv_to_pem(ec_priv)).strip() != pub_ec_pem_registrada.strip():
+    if pub_pem_from_priv(_priv_to_pem(ec_priv)).strip() != pub_ec_registrada.strip():
         raise HTTPException(403, "La llave privada no pertenece a este usuario")
     return ec_priv
 
 
-def exigir_rsa(bundle_pem: str, pub_rsa_pem_registrada: str | None):
-    """Extrae la RSA del bundle, confirma pertenencia y la devuelve ya en PEM."""
+def exigir_rsa(bundle_pem: str, pub_rsa_registrada: str | None):
+    """Extrae la RSA del bundle, verifica pertenencia y devuelve (priv_obj, priv_pem)."""
     _, rsa_priv = parse_pem_bundle(bundle_pem)
     if rsa_priv is None:
         raise HTTPException(400, "Falta la llave RSA privada en el bundle")
-    if not pub_rsa_pem_registrada:
+    if not pub_rsa_registrada:
         raise HTTPException(403, "Usuario sin llave RSA pública registrada")
     pem = _priv_to_pem(rsa_priv)
-    if pub_pem_from_priv(pem).strip() != pub_rsa_pem_registrada.strip():
+    if pub_pem_from_priv(pem).strip() != pub_rsa_registrada.strip():
         raise HTTPException(403, "La llave RSA no pertenece a este usuario")
     return rsa_priv, pem
 
 
 def desde_header(x_priv_keys: str | None) -> str:
-    """Los headers HTTP no admiten CR/LF → el cliente envía el bundle en base64.
-    Aceptamos también PEM en claro por retro-compat."""
+    # El cliente envía el bundle en base64 porque los headers no admiten CR/LF.
+    # También aceptamos PEM en claro por compatibilidad.
     if not x_priv_keys:
         raise HTTPException(401, "Falta cabecera X-Priv-Keys con tu llave privada")
     if "BEGIN" in x_priv_keys:

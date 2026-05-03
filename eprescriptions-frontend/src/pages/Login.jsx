@@ -89,7 +89,13 @@ export default function Login() {
       const to = data.rol === 'admin' ? '/admin/solicitudes' : '/dashboard'
       setTimeout(() => nav(to, { replace: true }), 350)
     } catch (err) {
-      toast.error(err?.uiMessage || 'No se pudo iniciar sesión')
+      const msg = err?.response?.data?.detail || ''
+      if (/verifica tu email/i.test(msg)) {
+        usuariosAPI.reenviarVerificacion(null, form.username.trim()).catch(() => {})
+        toast.warning('Revisa tu correo — te reenviamos el enlace de verificación')
+      } else {
+        toast.error(err?.uiMessage || 'No se pudo iniciar sesión')
+      }
     } finally { setBusy(false) }
   }
 
@@ -235,9 +241,16 @@ export default function Login() {
               </motion.button>
             </form>
 
-            <div className="mt-6 pt-5 border-t border-[var(--border-subtle)] text-center text-xs text-[color:var(--text-secondary)]">
-              ¿Nuevo?{' '}
-              <Link to="/registro" className="text-[color:var(--cyan)] hover:underline font-medium">Crea una cuenta</Link>
+            <div className="mt-6 pt-5 border-t border-[var(--border-subtle)] text-center text-xs text-[color:var(--text-secondary)] space-y-2">
+              <div>
+                ¿Nuevo?{' '}
+                <Link to="/registro" className="text-[color:var(--cyan)] hover:underline font-medium">Crea una cuenta</Link>
+              </div>
+              <div>
+                <Link to="/recuperar-password" className="text-[color:var(--text-secondary)] hover:underline">
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              </div>
             </div>
           </div>
 

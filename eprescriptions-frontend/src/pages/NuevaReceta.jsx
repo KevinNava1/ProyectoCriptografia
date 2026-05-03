@@ -79,7 +79,7 @@ export default function NuevaReceta() {
             <FileSignature className="text-[color:var(--cyan)]" /> Emitir nueva receta
           </h1>
           <p className="text-[color:var(--text-secondary)] text-sm mt-2">
-            Cada receta se cifra con AES-256-GCM y se firma con tu llave privada ECDSA.
+            Cada receta se cifra con AES-128-GCM y se firma con tu llave privada ECDSA.
           </p>
         </header>
 
@@ -191,7 +191,7 @@ export default function NuevaReceta() {
                       <div className="min-w-0">
                         <div className="font-semibold">Firmando con ECDSA P-256 + SHA3-256…</div>
                         <div className="text-xs text-[color:var(--text-secondary)]">
-                          ECDSA integra el hash internamente; en paralelo se cifra el payload con AES-256-GCM.
+                          ECDSA integra el hash internamente; en paralelo se cifra el payload con AES-128-GCM.
                         </div>
                       </div>
                     </motion.div>
@@ -213,7 +213,7 @@ export default function NuevaReceta() {
                 </motion.div>
                 <h2 className="font-heading text-2xl text-center mt-4 glitch text-[color:var(--emerald)]">Receta firmada</h2>
                 <p className="text-center text-sm text-[color:var(--text-secondary)] mt-2 max-w-md mx-auto">
-                  Cifrada con AES-256-GCM y firmada con ECDSA P-256 + SHA3-256 (hash integrado en la firma).
+                  Cifrada con AES-128-GCM y firmada con ECDSA P-256 + SHA3-256 (hash integrado en la firma).
                 </p>
 
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">

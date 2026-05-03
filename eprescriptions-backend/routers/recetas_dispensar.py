@@ -1,23 +1,10 @@
-"""§6 — Dispensación de una receta.
-
-Secuencia:
-    1. Validaciones previas (sin descifrar).
-    2. Bundle del farmacéutico → priv_ec + priv_rsa (ambas deben pertenecerle).
-    3. Descifrar DEK con RSA-OAEP → descifrar receta con AES-GCM (valida TAG).
-    4. Verificar firma ECDSA-SHA3 del médico sobre R.
-    5. Construir Sello, firmarlo con priv_ec del farmacéutico, persistir.
-    6. Actualizar contador + estado (en_proceso / dispensada_completa).
-
-El evento de dispensación funciona como "ticket": la firma del farmacéutico es
-implícita (el sello es la firma); el paciente puede firmar después como acuse.
-"""
+"""§6 — Dispensación de receta + acuse del paciente."""
 from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from cryptography.exceptions import InvalidTag
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -27,15 +14,13 @@ from auth import auth_required, require_roles
 from database import EventoDispensacion, Receta, Usuario, get_db
 from schemas.recetas import DispensarInput, FirmarTicketInput
 from services import bundle, canonical_receta
-from services.crypto import (
-    aes_gcm_decrypt,
-    ecdsa_sign,
-    ecdsa_verify,
-    rsa_oaep_decrypt,
-)
+from services.crypto import aes_gcm_decrypt, ecdsa_sign, ecdsa_verify, rsa_oaep_decrypt
+from services.crypto.crypto_log import banner_flow, step
 from services.estados import es_dispensable, to_legacy
 
 router = APIRouter(prefix="/recetas", tags=["recetas"])
+
+_ERR = "INTEGRIDAD comprometida o firma inválida"
 
 
 class TicketDispensacionSalida(BaseModel):
@@ -49,18 +34,18 @@ class TicketDispensacionSalida(BaseModel):
     paciente_username: Optional[str] = None
     medico_id: int
     medico_username: Optional[str] = None
-    medicamento: Optional[str] = None  # solo si la receta no está cifrada para el actor
+    medicamento: Optional[str] = None
     timestamp: Optional[datetime] = None
     fecha_firma_paciente: Optional[datetime] = None
-    firma_farmaceutico: str  # firma_sello (siempre presente)
+    firma_farmaceutico: str
     firma_paciente: Optional[str] = None
 
 
 def _evento_to_salida(ev: EventoDispensacion, db: Session) -> TicketDispensacionSalida:
     receta = db.query(Receta).filter(Receta.id == ev.receta_id).first()
     farm = db.query(Usuario).filter(Usuario.id == ev.farmaceutico_id).first()
-    pac = db.query(Usuario).filter(Usuario.id == receta.paciente_id).first() if receta else None
-    med = db.query(Usuario).filter(Usuario.id == receta.medico_id).first() if receta else None
+    pac  = db.query(Usuario).filter(Usuario.id == receta.paciente_id).first() if receta else None
+    med  = db.query(Usuario).filter(Usuario.id == receta.medico_id).first() if receta else None
     return TicketDispensacionSalida(
         id=ev.id,
         receta_id=ev.receta_id,
@@ -78,8 +63,6 @@ def _evento_to_salida(ev: EventoDispensacion, db: Session) -> TicketDispensacion
         firma_paciente=ev.firma_paciente,
     )
 
-_CRIPTO_ERR = "INTEGRIDAD comprometida o firma inválida"
-
 
 @router.post("/{receta_id}/dispensar")
 def dispensar_receta(
@@ -89,25 +72,22 @@ def dispensar_receta(
     user: Usuario = Depends(require_roles("farmaceutico")),
     db: Session = Depends(get_db),
 ):
+    banner_flow("§6 DISPENSAR",
+                "RSA-OAEP unwrap → AES-GCM decrypt → ECDSA verify médico → ECDSA sign sello")
+
     if farmaceutico_id != user.id:
         raise HTTPException(403, "farmaceutico_id no coincide con la sesión")
 
     r = db.query(Receta).filter(Receta.id == receta_id).first()
     if not r:
         raise HTTPException(404, "Receta no encontrada")
-
-    # §6.2 — validaciones previas (antes de gastar ciclos criptográficos).
     if not es_dispensable(r.estado):
         raise HTTPException(400, f"La receta ya está en estado '{to_legacy(r.estado)}'")
     if r.dispensaciones_realizadas >= r.dispensaciones_permitidas:
         raise HTTPException(400, "Receta sin dispensaciones disponibles")
 
-    # Lock: si la dispensación anterior aún no tiene acuse del paciente, bloquear.
-    # No se puede dispensar de nuevo hasta que el paciente firme el ticket previo.
-    pendiente = next(
-        (e for e in r.eventos if e.firma_paciente is None),
-        None,
-    )
+    # Bloquear si hay un acuse pendiente del paciente.
+    pendiente = next((e for e in r.eventos if e.firma_paciente is None), None)
     if pendiente is not None:
         raise HTTPException(
             409,
@@ -115,20 +95,16 @@ def dispensar_receta(
             f"antes de poder dispensar de nuevo.",
         )
 
-    last_ev = r.eventos[-1] if r.eventos else None
     now = datetime.now(timezone.utc)
-    if r.intervalo_dias and last_ev:
-        ts = last_ev.timestamp
+    if r.intervalo_dias and r.eventos:
+        ts = r.eventos[-1].timestamp
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
-        fecha_valida = ts + timedelta(days=r.intervalo_dias)
-        if now < fecha_valida:
-            raise HTTPException(
-                400,
-                f"Dispensación bloqueada por intervalo mínimo. Próxima fecha válida: {fecha_valida.isoformat()}",
-            )
+        prox = ts + timedelta(days=r.intervalo_dias)
+        if now < prox:
+            raise HTTPException(400, f"Dispensación bloqueada. Próxima fecha válida: {prox.isoformat()}")
 
-    # Bundle → ambas privadas deben pertenecer al farmacéutico.
+    step("§6 DISPENSAR", 0, "validar pertenencia de llaves EC y RSA del farmacéutico")
     ec_priv = bundle.exigir_ec(datos.llave_privada_farmaceutico, user.pub_ec_pem)
     _, rsa_pem = bundle.exigir_rsa(datos.llave_privada_farmaceutico, user.pub_rsa_pem)
 
@@ -136,32 +112,31 @@ def dispensar_receta(
     if not acceso:
         raise HTTPException(403, "Esta farmacia no está autorizada para dispensar la receta")
 
-    # §6.3 — Descifrar DEK.
+    step("§6 DISPENSAR", 1, "RSA-OAEP unwrap → DEK")
     try:
         dek = rsa_oaep_decrypt(rsa_pem, acceso.c_wrap_far)
     except Exception:
-        raise HTTPException(400, _CRIPTO_ERR)
+        raise HTTPException(400, _ERR)
 
-    # §6.4 — Descifrar R (valida TAG).
+    step("§6 DISPENSAR", 2, "AES-128-GCM decrypt + validar TAG")
     try:
         r_bytes = aes_gcm_decrypt(dek, r.iv_aes, r.ciphertext, r.tag_aes, bytes(r.aad))
-    except (InvalidTag, Exception):
-        dek = b"\x00" * 32
-        raise HTTPException(400, _CRIPTO_ERR)
+    except Exception:
+        dek = b"\x00" * 16
+        raise HTTPException(400, _ERR)
 
-    # §6.5 — Verificar firma ECDSA del médico sobre R.
+    step("§6 DISPENSAR", 3, "ECDSA verify → firma del médico sobre R")
     medico = db.query(Usuario).filter(Usuario.id == r.medico_id).first()
     if not medico or not medico.pub_ec_pem:
-        dek = b"\x00" * 32
-        raise HTTPException(400, _CRIPTO_ERR)
+        dek = b"\x00" * 16
+        raise HTTPException(400, _ERR)
     if not ecdsa_verify(medico.pub_ec_pem, r_bytes, r.firma_doctor):
-        dek = b"\x00" * 32
-        raise HTTPException(400, _CRIPTO_ERR)
+        dek = b"\x00" * 16
+        raise HTTPException(400, _ERR)
 
-    # §6.6 — número de dispensación.
     numero = r.dispensaciones_realizadas + 1
 
-    # §6.7 — Construir y firmar Sello.
+    step("§6 DISPENSAR", 4, "construir Sello + ECDSA sign → S_F")
     sello_bytes = canonical_receta.build_sello(
         id_farmaceutico=user.id, id_receta=r.id,
         numero_dispensacion=numero,
@@ -169,11 +144,8 @@ def dispensar_receta(
         timestamp_iso=now.isoformat(),
     )
     s_f = ecdsa_sign(ec_priv, sello_bytes)
+    dek = b"\x00" * 16
 
-    # La DEK ya no se necesita.
-    dek = b"\x00" * 32
-
-    # §6.8 — INSERT evento (= ticket pendiente de firma del paciente).
     proxima = now + timedelta(days=r.intervalo_dias) if r.intervalo_dias else None
     evento = EventoDispensacion(
         receta_id=r.id, farmaceutico_id=user.id,
@@ -183,11 +155,9 @@ def dispensar_receta(
     db.add(evento)
     db.flush()
 
-    # §6.9 — actualizar contadores y estado.
     r.dispensaciones_realizadas = numero
     r.estado = "dispensada_completa" if numero >= r.dispensaciones_permitidas else "en_proceso"
 
-    # §6.10 — audit.
     audit_log(
         db, usuario_id=user.id, accion="dispensacion", id_receta=r.id,
         metadata={"numero_dispensacion": numero, "de": r.dispensaciones_permitidas},
@@ -201,7 +171,6 @@ def dispensar_receta(
         "estado": to_legacy(r.estado),
         "numero_dispensacion": numero,
         "dispensaciones_permitidas": r.dispensaciones_permitidas,
-        # El paciente puede firmar este ticket en /eventos-dispensacion/{id}/firmar-paciente.
         "evento_id": evento.id,
         "ticket_estado": "pendiente_paciente",
         "verificaciones": {
@@ -211,9 +180,6 @@ def dispensar_receta(
     }
 
 
-# ─────────────────────────────────────────────────────────────────────
-#  GET /eventos-dispensacion — todos los del paciente (cualquier estado)
-# ─────────────────────────────────────────────────────────────────────
 @router.get("/eventos-dispensacion", response_model=list[TicketDispensacionSalida],
             tags=["dispensacion-tickets"])
 def listar_eventos_paciente(
@@ -228,13 +194,9 @@ def listar_eventos_paciente(
         q = db.query(EventoDispensacion).join(Receta).filter(Receta.medico_id == user.id)
     else:
         return []
-    q = q.order_by(EventoDispensacion.timestamp.desc())
-    return [_evento_to_salida(ev, db) for ev in q.all()]
+    return [_evento_to_salida(ev, db) for ev in q.order_by(EventoDispensacion.timestamp.desc()).all()]
 
 
-# ─────────────────────────────────────────────────────────────────────
-#  GET /eventos-dispensacion/pendientes — los que el PACIENTE debe firmar
-# ─────────────────────────────────────────────────────────────────────
 @router.get("/eventos-dispensacion/pendientes", response_model=list[TicketDispensacionSalida],
             tags=["dispensacion-tickets"])
 def listar_pendientes_paciente(
@@ -250,9 +212,6 @@ def listar_pendientes_paciente(
     return [_evento_to_salida(ev, db) for ev in eventos]
 
 
-# ─────────────────────────────────────────────────────────────────────
-#  POST /eventos-dispensacion/{id}/firmar-paciente
-# ─────────────────────────────────────────────────────────────────────
 @router.post("/eventos-dispensacion/{evento_id}/firmar-paciente",
              response_model=TicketDispensacionSalida, tags=["dispensacion-tickets"])
 def firmar_evento_paciente(
@@ -264,24 +223,27 @@ def firmar_evento_paciente(
     ev = db.query(EventoDispensacion).filter(EventoDispensacion.id == evento_id).first()
     if not ev:
         raise HTTPException(404, "Evento de dispensación no encontrado")
-
     receta = db.query(Receta).filter(Receta.id == ev.receta_id).first()
     if not receta or receta.paciente_id != user.id:
         raise HTTPException(403, "Este ticket de dispensación no es tuyo")
     if ev.firma_paciente:
         raise HTTPException(409, "Ya firmaste este ticket")
 
+    banner_flow("§6.b ACUSE PACIENTE", "Paciente firma el sello de dispensación con ECDSA")
+
+    step("§6.b ACUSE", 1, "ECDSA sign → firmar sello con priv EC del paciente")
     ec_priv = bundle.exigir_ec(datos.llave_privada, user.pub_ec_pem)
     firma = ecdsa_sign(ec_priv, bytes(ev.manifiesto_sello))
+
+    step("§6.b ACUSE", 2, "ECDSA verify → comprobar firma recién emitida")
     if not ecdsa_verify(user.pub_ec_pem, bytes(ev.manifiesto_sello), firma):
         raise HTTPException(400, "Firma inválida")
 
-    ev.firma_paciente = firma
+    ev.firma_paciente      = firma
     ev.fecha_firma_paciente = datetime.now(timezone.utc)
 
     audit_log(
-        db, usuario_id=user.id, accion="firma_ticket_dispensacion",
-        id_receta=ev.receta_id,
+        db, usuario_id=user.id, accion="firma_ticket_dispensacion", id_receta=ev.receta_id,
         metadata={"evento_id": ev.id, "numero_dispensacion": ev.numero_dispensacion},
     )
     db.commit()
@@ -289,13 +251,6 @@ def firmar_evento_paciente(
     return _evento_to_salida(ev, db)
 
 
-# ─────────────────────────────────────────────────────────────────────
-#  GET /eventos-dispensacion/{id}/verificar
-#  Verificación criptográfica por DISPENSACIÓN (no por receta entera).
-#  Cada dispensación tiene su propio farmacéutico que firmó el sello, y
-#  opcionalmente el acuse del paciente. Esto permite validar exactamente
-#  quién firmó la entrega N de la receta sin mezclar con otras entregas.
-# ─────────────────────────────────────────────────────────────────────
 @router.get("/eventos-dispensacion/{evento_id}/verificar", tags=["dispensacion-tickets"])
 def verificar_evento(
     evento_id: int,
@@ -309,7 +264,6 @@ def verificar_evento(
     if not receta:
         raise HTTPException(404, "Receta no encontrada")
 
-    # RBAC: solo paciente dueño / farmacéutico que dispensó / médico emisor.
     if user.rol == "paciente" and receta.paciente_id != user.id:
         raise HTTPException(403, "Esta dispensación no te pertenece")
     if user.rol == "farmaceutico" and ev.farmaceutico_id != user.id:
@@ -317,11 +271,10 @@ def verificar_evento(
     if user.rol == "medico" and receta.medico_id != user.id:
         raise HTTPException(403, "No emitiste la receta de esta dispensación")
 
-    medico = db.query(Usuario).filter(Usuario.id == receta.medico_id).first()
+    medico       = db.query(Usuario).filter(Usuario.id == receta.medico_id).first()
     farmaceutico = db.query(Usuario).filter(Usuario.id == ev.farmaceutico_id).first()
-    paciente = db.query(Usuario).filter(Usuario.id == receta.paciente_id).first()
+    paciente     = db.query(Usuario).filter(Usuario.id == receta.paciente_id).first()
 
-    # AAD coherente — el TAG de AES-GCM autentica id_receta/id_doctor.
     try:
         aad = json.loads(bytes(receta.aad).decode())
         aad_ok = (
@@ -334,20 +287,16 @@ def verificar_evento(
 
     sello_bytes = bytes(ev.manifiesto_sello)
 
-    # Firma del médico sobre R: no se puede recomputar sin descifrar; reportamos
-    # coherencia AAD (ECDSA-SHA3 sobre R verificable solo cuando el actor tiene
-    # la priv_rsa para descifrar — fuera del scope de un endpoint público).
+    # Firma médico: no verificable sin descifrar R (requiere priv_rsa del destinatario).
     firma_medico_ok = aad_ok
 
-    # Firma del farmacéutico sobre el sello — verificable directamente.
     firma_farm_ok = False
     if farmaceutico and farmaceutico.pub_ec_pem and ev.firma_sello:
         firma_farm_ok = ecdsa_verify(farmaceutico.pub_ec_pem, sello_bytes, ev.firma_sello)
 
-    # Acuse del paciente sobre el mismo sello (puede no existir aún).
-    firma_paciente_ok = None
-    if ev.firma_paciente:
-        firma_paciente_ok = ecdsa_verify(paciente.pub_ec_pem, sello_bytes, ev.firma_paciente)
+    firma_pac_ok = None
+    if ev.firma_paciente and paciente and paciente.pub_ec_pem:
+        firma_pac_ok = ecdsa_verify(paciente.pub_ec_pem, sello_bytes, ev.firma_paciente)
 
     return {
         "evento_id": ev.id,
@@ -369,16 +318,12 @@ def verificar_evento(
         } if farmaceutico else None,
         "paciente": {
             "id": paciente.id, "username": paciente.username, "nombre": paciente.nombre,
-            "llave_publica": paciente.pub_ec_pem, "firma_valida": firma_paciente_ok,
+            "llave_publica": paciente.pub_ec_pem, "firma_valida": firma_pac_ok,
             "firma": ev.firma_paciente,
         } if paciente else None,
     }
 
 
-# ─────────────────────────────────────────────────────────────────────
-#  GET /recetas/{id}/eventos-dispensacion — lista de dispensaciones de
-#  UNA receta concreta (para drill-down en la pantalla de Verificar).
-# ─────────────────────────────────────────────────────────────────────
 @router.get("/{receta_id}/eventos-dispensacion", response_model=list[TicketDispensacionSalida],
             tags=["dispensacion-tickets"])
 def listar_eventos_de_receta(
@@ -393,9 +338,6 @@ def listar_eventos_de_receta(
         raise HTTPException(403, "Esta receta no es tuya")
     if user.rol == "medico" and receta.medico_id != user.id:
         raise HTTPException(403, "No eres el médico emisor")
-    # Farmacéutico: puede ver todas las dispensaciones de la receta (cualquiera
-    # de las farmacias autorizadas pudo dispensar — coherente con el modelo
-    # multi-farmacia).
     eventos = (
         db.query(EventoDispensacion)
         .filter(EventoDispensacion.receta_id == receta_id)

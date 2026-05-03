@@ -60,10 +60,7 @@ export default function Verificar() {
   const pickEvento = async (ev) => {
     setSelectedEv(ev); setVerif(null); setPhase('running')
     try {
-      const [{ data }] = await Promise.all([
-        dispensacionTicketsAPI.verificar(ev.id),
-        new Promise(res => setTimeout(res, 900)),
-      ])
+      const { data } = await dispensacionTicketsAPI.verificar(ev.id)
       setVerif(data); setPhase('done')
     } catch (err) {
       toast.error(err?.uiMessage || 'No se pudo verificar la dispensación')
@@ -345,7 +342,7 @@ function ResumenBanner({ verif }) {
   const tone = allOk
     ? { b: 'rgba(0,168,112,0.45)', bg: 'rgba(0,168,112,0.10)', c: '#007A55', Icon: ShieldCheck,
         title: 'Cadena criptográfica íntegra',
-        msg: 'AES-256-GCM autentica el cifrado y las firmas ECDSA P-256 + SHA3-256 validan al médico y al farmacéutico que dispensó. El acuse del paciente (si existe) está firmado correctamente.' }
+        msg: 'AES-128-GCM autentica el cifrado y las firmas ECDSA P-256 + SHA3-256 validan al médico y al farmacéutico que dispensó. El acuse del paciente (si existe) está firmado correctamente.' }
     : { b: 'rgba(180,35,24,0.42)', bg: 'rgba(180,35,24,0.08)', c: '#B42318', Icon: ShieldAlert,
         title: 'Hay una verificación fallida',
         msg: 'Alguna comprobación (AES-GCM o una firma ECDSA) no pasó. Revisa los detalles de cada firmante a continuación.' }
@@ -368,7 +365,7 @@ function ResumenBanner({ verif }) {
         </div>
       </div>
       <div className="flex flex-wrap gap-2 mt-3.5 pl-1">
-        <Chip label="AES-256-GCM" ok={!!verif.cifrado_aes_gcm} />
+        <Chip label="AES-128-GCM" ok={!!verif.cifrado_aes_gcm} />
         <Chip label="ECDSA médico" ok={!!verif.medico?.firma_valida} />
         <Chip label="ECDSA farmacéutico" ok={!!verif.farmaceutico?.firma_valida} />
         {verif.paciente?.firma_valida != null && (

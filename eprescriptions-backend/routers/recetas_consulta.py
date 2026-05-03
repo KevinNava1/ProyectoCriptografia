@@ -1,9 +1,4 @@
-"""§5 — Consulta de receta (paciente / médico / farmacéutico) + verificar-firmas.
-
-El paciente y el farmacéutico reciben la receta DESCIFRADA usando su propia
-RSA privada (enviada en el header `X-Priv-Keys` como base64). El médico NO
-puede descifrar — por diseño no se le entrega C_wrap_doc en el flujo canónico.
-"""
+"""§5 — Consulta de recetas (paciente / médico / farmacéutico) + verificación de firmas."""
 from __future__ import annotations
 
 import json
@@ -13,20 +8,18 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from audit import registrar as audit_log
-from auth import require_roles
+from auth import auth_required, require_roles
 from database import EventoDispensacion, Receta, Usuario, get_db
 from schemas.recetas import RecetaDescifrada
 from services import bundle, receta_descifrado
 from services.crypto import ecdsa_verify
+from services.crypto.crypto_log import banner_flow, step
 from services.estados import to_legacy
 from services.hidratador import hidratar
 
 router = APIRouter(prefix="/recetas", tags=["recetas"])
 
 
-# ─────────────────────────────────────────────────────────────────────
-#  §5 — Paciente descifra con su propia RSA
-# ─────────────────────────────────────────────────────────────────────
 @router.get("/paciente/{paciente_id}", response_model=list[RecetaDescifrada])
 def consultar_recetas_paciente(
     paciente_id: int,
@@ -37,6 +30,10 @@ def consultar_recetas_paciente(
     if paciente_id != user.id:
         raise HTTPException(403, "No puedes consultar recetas de otro paciente")
 
+    banner_flow("§5 CONSULTA PACIENTE",
+                "Paciente recupera DEK con su priv RSA (RSA-OAEP) y descifra R (AES-GCM)")
+
+    step("§5 CONSULTA", 0, "validar pertenencia de la priv RSA (bundle)")
     bundle_pem = bundle.desde_header(x_priv_keys)
     _, rsa_pem = bundle.exigir_rsa(bundle_pem, user.pub_rsa_pem)
 
@@ -46,6 +43,8 @@ def consultar_recetas_paciente(
         .order_by(Receta.id.desc())
         .all()
     )
+
+    step("§5 CONSULTA", 1, f"descifrar {len(recetas)} receta(s)")
     out: list[RecetaDescifrada] = []
     for r in recetas:
         try:
@@ -56,15 +55,11 @@ def consultar_recetas_paciente(
             continue
         out.append(hidratar(r, contenido, db))
 
-    audit_log(db, usuario_id=user.id, accion="consulta_receta",
-              metadata={"cantidad": len(out)})
+    audit_log(db, usuario_id=user.id, accion="consulta_receta", metadata={"cantidad": len(out)})
     db.commit()
     return out
 
 
-# ─────────────────────────────────────────────────────────────────────
-#  §5 — Médico lista sus recetas (sin descifrar — no guarda C_wrap_doc)
-# ─────────────────────────────────────────────────────────────────────
 @router.get("/medico/{medico_id}", response_model=list[RecetaDescifrada])
 def consultar_recetas_medico(
     medico_id: int,
@@ -105,9 +100,6 @@ def consultar_recetas_medico(
     return out
 
 
-# ─────────────────────────────────────────────────────────────────────
-#  Farmacéutico — histórico de recetas que ESTA farmacia dispensó
-# ─────────────────────────────────────────────────────────────────────
 @router.get("/farmaceutico/{farmaceutico_id}", response_model=list[RecetaDescifrada])
 def consultar_recetas_farmaceutico(
     farmaceutico_id: int,
@@ -117,6 +109,9 @@ def consultar_recetas_farmaceutico(
 ):
     if farmaceutico_id != user.id:
         raise HTTPException(403, "No puedes consultar recetas de otra farmacia")
+
+    banner_flow("§5 HISTÓRICO FARMACIA",
+                "Farmacéutico descifra recetas dispensadas (RSA-OAEP → AES-GCM)")
 
     bundle_pem = bundle.desde_header(x_priv_keys)
     _, rsa_pem = bundle.exigir_rsa(bundle_pem, user.pub_rsa_pem)
@@ -142,15 +137,15 @@ def consultar_recetas_farmaceutico(
     return out
 
 
-# ─────────────────────────────────────────────────────────────────────
-#  Farmacéutico — recetas pendientes de dispensar
-# ─────────────────────────────────────────────────────────────────────
 @router.get("/pendientes", response_model=list[RecetaDescifrada])
 def listar_recetas_pendientes(
     x_priv_keys: Optional[str] = Header(default=None, alias="X-Priv-Keys"),
     user: Usuario = Depends(require_roles("farmaceutico")),
     db: Session = Depends(get_db),
 ):
+    banner_flow("§5 PENDIENTES FARMACIA",
+                "Farmacéutico descifra recetas activas/en_proceso")
+
     bundle_pem = bundle.desde_header(x_priv_keys)
     _, rsa_pem = bundle.exigir_rsa(bundle_pem, user.pub_rsa_pem)
 
@@ -175,19 +170,15 @@ def listar_recetas_pendientes(
     return out
 
 
-# ─────────────────────────────────────────────────────────────────────
-#  Verificación pública de firmas (sin priv key)
-# ─────────────────────────────────────────────────────────────────────
 @router.get("/{receta_id}/verificar-firmas")
-def verificar_firmas(receta_id: int, db: Session = Depends(get_db)):
-    """Sin priv_rsa no se puede reconstruir R — por eso:
-
-    * AES-GCM: valida indirectamente que AAD es coherente (id_receta, id_doctor).
-    * Firma del médico: no verificable sin R; marcamos coherente si el AAD está
-      íntegro Y el TAG tiene 16 bytes (no fue truncado). El hash NO se reporta
-      como un check separado: ECDSA P-256 + SHA3-256 lo integra.
-    * Firma del sello farmacéutico: SÍ es verificable porque el manifiesto es
-      público (`manifiesto_sello` está en BD).
+def verificar_firmas(
+    receta_id: int,
+    _user: Usuario = Depends(auth_required),
+    db: Session = Depends(get_db),
+):
+    """Sin priv_rsa no se puede reconstruir R, así que:
+    - Firma médico: solo verificamos coherencia del AAD + len(TAG).
+    - Firma farmacéutico: verificable directo porque el manifiesto es público.
     """
     r = db.query(Receta).filter(Receta.id == receta_id).first()
     if not r:

@@ -142,7 +142,7 @@ def bootstrap_admin(db: Session, *, verbose: bool = True) -> tuple[Usuario, str 
     admin = Usuario(
         username=username, nombre=nombre, email=email,
         password_hash=pw_hash, salt_pw=salt_pw, rol="admin",
-        estado="activo",
+        estado="activo", email_verificado=True,
         pub_ec_pem=par_ec.pub_pem, pub_rsa_pem=par_rsa.pub_pem,
     )
     db.add(admin)

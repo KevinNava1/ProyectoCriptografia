@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import JSZip from 'jszip'
-import { AlertTriangle, ArrowRight, UserPlus, Download, AtSign, KeyRound, Globe, Package, Check } from 'lucide-react'
+import { AlertTriangle, ArrowRight, UserPlus, Download, AtSign, KeyRound, Globe, Package, Check, Mail } from 'lucide-react'
 import AuroraBackground from '../components/3d/AuroraBackground'
 import VideoBackdrop from '../components/3d/VideoBackdrop'
 import MedicalVortex3D from '../components/3d/MedicalVortex3D'
@@ -26,7 +26,7 @@ const USERNAME_RE = /^[a-zA-Z0-9_.-]{3,40}$/
 export default function Registro() {
   const nav = useNavigate()
   const [step, setStep] = useState(1)
-  const [form, setForm] = useState({ username: '', nombre: '', email: '', password: '', rol: 'paciente' })
+  const [form, setForm] = useState({ username: '', nombre: '', email: '', password: '', confirm: '', rol: 'paciente' })
   const [resp, setResp] = useState(null)
   const [busy, setBusy] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
@@ -50,13 +50,14 @@ export default function Registro() {
 
   const submit = async (e) => {
     e.preventDefault()
-    if (!form.username || !form.nombre || !form.email || !form.password) {
+    if (!form.username || !form.nombre || !form.email || !form.password || !form.confirm) {
       return toast.error('Completa todos los campos')
     }
     if (!USERNAME_RE.test(form.username)) {
       return toast.error('El usuario debe tener 3-40 caracteres (letras, números, . _ -)')
     }
     if (form.password.length < 6) return toast.error('La contraseña debe tener al menos 6 caracteres')
+    if (form.password !== form.confirm) return toast.error('Las contraseñas no coinciden')
     setBusy(true)
     try {
       const { data } = await usuariosAPI.registrar({
@@ -216,12 +217,29 @@ correspondientes. Las públicas ya están registradas en el servidor.
                     </Field>
                   </div>
 
+                  <Field label="Email">
+                    <input type="email" value={form.email} onChange={e => onChange('email', e.target.value)} className="input-field" placeholder="ana@hosp.mx" autoComplete="email" />
+                  </Field>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <Field label="Email">
-                      <input type="email" value={form.email} onChange={e => onChange('email', e.target.value)} className="input-field" placeholder="ana@hosp.mx" autoComplete="email" />
-                    </Field>
                     <Field label="Contraseña">
                       <input type="password" value={form.password} onChange={e => onChange('password', e.target.value)} className="input-field" placeholder="Mín. 6 caracteres" autoComplete="new-password" />
+                    </Field>
+                    <Field label="Confirmar contraseña">
+                      <input
+                        type="password"
+                        value={form.confirm}
+                        onChange={e => onChange('confirm', e.target.value)}
+                        className="input-field"
+                        placeholder="Repite la contraseña"
+                        autoComplete="new-password"
+                        style={form.confirm && form.confirm !== form.password
+                          ? { borderColor: 'rgba(180,35,24,0.6)' }
+                          : form.confirm && form.confirm === form.password
+                            ? { borderColor: 'rgba(0,168,112,0.6)' }
+                            : {}
+                        }
+                      />
                     </Field>
                   </div>
 
@@ -264,6 +282,20 @@ correspondientes. Las públicas ya están registradas en el servidor.
                       Usa este nombre de usuario para iniciar sesión. Si eres paciente, este username es el que debe
                       darte tu médico para emitir recetas a tu nombre.
                     </p>
+                  </div>
+
+                  <div
+                    className="flex items-start gap-3 p-4 rounded-xl"
+                    style={{ background: 'rgba(10,132,255,0.06)', border: '1px solid rgba(10,132,255,0.30)' }}
+                  >
+                    <Mail className="text-[color:var(--cyan)] shrink-0 mt-0.5" size={20} />
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm">Revisa tu bandeja de entrada</div>
+                      <p className="text-xs text-[color:var(--text-secondary)] mt-1 leading-relaxed">
+                        Te enviamos un correo a <strong>{resp.email}</strong> con un enlace de verificación.
+                        Debes verificar tu email antes de poder iniciar sesión.
+                      </p>
+                    </div>
                   </div>
 
                   {keys && (keys.ec_priv || keys.rsa_priv) && (
@@ -462,14 +494,13 @@ function KeyCard({ title, subtitle, accent, bg, icon: Icon, iconColor, done, onD
 }
 
 function StepHeader({ step }) {
+  const titles = { 1: 'Crear cuenta', 2: 'Guarda tus llaves' }
   return (
     <div className="flex items-center gap-3">
       <ShieldLogo size={48} />
       <div className="flex-1 min-w-0">
         <div className="label-xs">Paso {step} de 2</div>
-        <h1 className="font-heading text-2xl">
-          {step === 1 ? 'Crear cuenta' : 'Credenciales listas'}
-        </h1>
+        <h1 className="font-heading text-2xl">{titles[step]}</h1>
       </div>
       <div className="flex gap-1 shrink-0">
         {[1, 2].map(n => (

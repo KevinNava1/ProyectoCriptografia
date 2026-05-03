@@ -21,7 +21,17 @@ export const useAuthStore = create(
     }),
     {
       name: 'eprescriptions-auth',
-      partialize: (s) => ({ user: s.user }),
+      partialize: (s) => ({
+        user: s.user ? {
+          id: s.user.id,
+          username: s.user.username,
+          nombre: s.user.nombre,
+          email: s.user.email,
+          rol: s.user.rol,
+          token: s.user.token,
+          // llave_privada* se omite: material criptográfico solo en memoria
+        } : null,
+      }),
     }
   )
 )

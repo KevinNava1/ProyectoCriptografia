@@ -95,7 +95,7 @@ export default function MisRecetas() {
         {!loading && !error && filtered.length === 0 && (
           <EmptyState
             title={filter === 'all' ? 'Sin recetas todavía' : 'Ninguna coincide con el filtro'}
-            message="Cuando un médico te emita una receta, aparecerá aquí cifrada con AES-256-GCM."
+            message="Cuando un médico te emita una receta, aparecerá aquí cifrada con AES-128-GCM."
           />
         )}
 
