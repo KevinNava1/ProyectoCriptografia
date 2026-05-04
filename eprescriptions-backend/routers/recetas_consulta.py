@@ -44,16 +44,22 @@ def consultar_recetas_paciente(
         .all()
     )
 
-    step("§5 CONSULTA", 1, f"descifrar {len(recetas)} receta(s)")
+    step("§5 CONSULTA", 1, f"descifrar {len(recetas)} receta(s) y verificar firma del médico")
     out: list[RecetaDescifrada] = []
     for r in recetas:
         try:
-            contenido = receta_descifrado.descifrar(
+            contenido, r_bytes = receta_descifrado.descifrar(
                 rsa_pem, r.c_wrap_pac, r.iv_aes, r.ciphertext, r.tag_aes, bytes(r.aad),
             )
         except HTTPException:
             continue
-        out.append(hidratar(r, contenido, db))
+        # Verificación REAL de la firma ECDSA del médico sobre el R recién descifrado.
+        medico = db.query(Usuario).filter(Usuario.id == r.medico_id).first()
+        firma_ok = bool(
+            medico and medico.pub_ec_pem
+            and ecdsa_verify(medico.pub_ec_pem, r_bytes, r.firma_doctor)
+        )
+        out.append(hidratar(r, contenido, db, firma_medico_ok=firma_ok))
 
     audit_log(db, usuario_id=user.id, accion="consulta_receta", metadata={"cantidad": len(out)})
     db.commit()
@@ -128,12 +134,17 @@ def consultar_recetas_farmaceutico(
         if not acceso:
             continue
         try:
-            contenido = receta_descifrado.descifrar(
+            contenido, r_bytes = receta_descifrado.descifrar(
                 rsa_pem, acceso.c_wrap_far, r.iv_aes, r.ciphertext, r.tag_aes, bytes(r.aad),
             )
         except HTTPException:
             continue
-        out.append(hidratar(r, contenido, db))
+        medico = db.query(Usuario).filter(Usuario.id == r.medico_id).first()
+        firma_ok = bool(
+            medico and medico.pub_ec_pem
+            and ecdsa_verify(medico.pub_ec_pem, r_bytes, r.firma_doctor)
+        )
+        out.append(hidratar(r, contenido, db, firma_medico_ok=firma_ok))
     return out
 
 
@@ -161,12 +172,17 @@ def listar_recetas_pendientes(
         if not acceso:
             continue
         try:
-            contenido = receta_descifrado.descifrar(
+            contenido, r_bytes = receta_descifrado.descifrar(
                 rsa_pem, acceso.c_wrap_far, r.iv_aes, r.ciphertext, r.tag_aes, bytes(r.aad),
             )
         except HTTPException:
             continue
-        out.append(hidratar(r, contenido, db))
+        medico = db.query(Usuario).filter(Usuario.id == r.medico_id).first()
+        firma_ok = bool(
+            medico and medico.pub_ec_pem
+            and ecdsa_verify(medico.pub_ec_pem, r_bytes, r.firma_doctor)
+        )
+        out.append(hidratar(r, contenido, db, firma_medico_ok=firma_ok))
     return out
 
 
@@ -176,9 +192,16 @@ def verificar_firmas(
     _user: Usuario = Depends(auth_required),
     db: Session = Depends(get_db),
 ):
-    """Sin priv_rsa no se puede reconstruir R, así que:
-    - Firma médico: solo verificamos coherencia del AAD + len(TAG).
-    - Firma farmacéutico: verificable directo porque el manifiesto es público.
+    """Verificación pública (sin priv_rsa).
+
+    - Firma del farmacéutico: SÍ se verifica criptográficamente porque el
+      manifiesto del sello es público (`manifiesto_sello`).
+    - Firma del médico: NO se puede verificar desde aquí porque requiere
+      reconstruir R, y R está cifrado dentro del ciphertext AES-GCM (solo lo
+      recupera quien tenga la priv RSA del paciente o de una farmacia
+      autorizada). Devolvemos `firma_valida: null` para no mentir; quien
+      necesite la verificación real debe usar el endpoint de consulta del
+      paciente/farmacia, que sí descifra y verifica.
     """
     r = db.query(Receta).filter(Receta.id == receta_id).first()
     if not r:
@@ -202,7 +225,6 @@ def verificar_firmas(
         firma_farm_ok = ecdsa_verify(
             farmaceutico.pub_ec_pem, bytes(last_ev.manifiesto_sello), last_ev.firma_sello,
         )
-    firma_medico_ok = aad_ok and len(r.tag_aes) == 16
 
     return {
         "receta_id": r.id,
@@ -213,7 +235,10 @@ def verificar_firmas(
             "username": medico.username,
             "nombre": medico.nombre,
             "llave_publica": medico.pub_ec_pem,
-            "firma_valida": firma_medico_ok,
+            # null = no verificable desde este endpoint público (requiere
+            # descifrar R con priv_rsa del destinatario).
+            "firma_valida": None,
+            "nota": "Verificable solo tras descifrar R; usa la consulta del paciente/farmacia.",
         } if medico else None,
         "farmaceutico": {
             "id": farmaceutico.id,

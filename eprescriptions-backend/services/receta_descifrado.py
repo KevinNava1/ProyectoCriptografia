@@ -20,7 +20,12 @@ def descifrar(
     ciphertext: bytes,
     tag: bytes,
     aad: bytes,
-) -> dict:
+) -> tuple[dict, bytes]:
+    """Devuelve (contenido_dict, plaintext_bytes).
+
+    Los bytes brutos son los mismos que firmó el médico (R canónico) y se
+    necesitan para verificar la firma ECDSA sin re-canonicalización.
+    """
     try:
         dek = rsa_oaep_decrypt(priv_rsa_pem, c_wrap)
     except Exception:
@@ -31,4 +36,4 @@ def descifrar(
         raise HTTPException(400, _ERR)
     finally:
         dek = b"\x00" * 16
-    return json.loads(pt.decode())
+    return json.loads(pt.decode()), pt

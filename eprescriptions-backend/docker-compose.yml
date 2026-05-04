@@ -34,7 +34,10 @@ services:
       DB_USER: ${DB_USER:-rxuser}
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
       DB_NAME: ${DB_NAME:-securerx}
-      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-prod}
+      # Sin default: si JWT_SECRET no está en el .env, el contenedor falla al
+      # arrancar (jwt_service.py rechaza placeholders y secretos < 32 chars).
+      # Genera uno real con: openssl rand -hex 32
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET es obligatorio (genera con openssl rand -hex 32)}"
       CA_DIR: /app/ca
       CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost,http://localhost:5173}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}

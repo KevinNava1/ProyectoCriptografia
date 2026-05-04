@@ -42,6 +42,10 @@ class RecetaDescifrada(BaseModel):
     estado: str
     hash_sha3: str
     firma_medico: str
+    # Resultado real de ecdsa_verify(pub_ec_medico, R_bytes, firma_medico).
+    # Solo se setea cuando el endpoint pudo descifrar R (es decir, cuando el
+    # destinatario aportó su priv RSA). En endpoints públicos queda en None.
+    firma_medico_ok: Optional[bool] = None
     firma_farmaceutico: Optional[str] = None
     dispensaciones_permitidas: int = 1
     dispensaciones_realizadas: int = 0

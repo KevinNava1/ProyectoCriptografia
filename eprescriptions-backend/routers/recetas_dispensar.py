@@ -287,8 +287,10 @@ def verificar_evento(
 
     sello_bytes = bytes(ev.manifiesto_sello)
 
-    # Firma médico: no verificable sin descifrar R (requiere priv_rsa del destinatario).
-    firma_medico_ok = aad_ok
+    # Firma del médico: no verificable desde este endpoint sin priv_rsa del
+    # destinatario (requiere descifrar R). Devolvemos null para no mentir;
+    # la verificación real ocurre en /recetas/paciente/{id} y similares.
+    firma_medico_ok = None
 
     firma_farm_ok = False
     if farmaceutico and farmaceutico.pub_ec_pem and ev.firma_sello:
@@ -309,6 +311,7 @@ def verificar_evento(
         "medico": {
             "id": medico.id, "username": medico.username, "nombre": medico.nombre,
             "llave_publica": medico.pub_ec_pem, "firma_valida": firma_medico_ok,
+            "nota_firma": "Verificable solo tras descifrar R con priv_rsa del destinatario.",
             "firma": receta.firma_doctor,
         } if medico else None,
         "farmaceutico": {

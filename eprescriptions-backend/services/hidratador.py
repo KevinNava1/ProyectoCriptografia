@@ -14,7 +14,12 @@ from schemas.recetas import RecetaDescifrada
 from services.estados import to_legacy
 
 
-def hidratar(r: Receta, contenido: dict[str, Any], db: Session) -> RecetaDescifrada:
+def hidratar(
+    r: Receta,
+    contenido: dict[str, Any],
+    db: Session,
+    firma_medico_ok: bool | None = None,
+) -> RecetaDescifrada:
     medico = db.query(Usuario).filter(Usuario.id == r.medico_id).first()
     paciente = db.query(Usuario).filter(Usuario.id == r.paciente_id).first()
     last_ev = r.eventos[-1] if r.eventos else None
@@ -38,6 +43,7 @@ def hidratar(r: Receta, contenido: dict[str, Any], db: Session) -> RecetaDescifr
         estado=to_legacy(r.estado),
         hash_sha3=r.hash_sha3_hex,
         firma_medico=r.firma_doctor,
+        firma_medico_ok=firma_medico_ok,
         firma_farmaceutico=last_ev.firma_sello if last_ev else None,
         dispensaciones_permitidas=r.dispensaciones_permitidas,
         dispensaciones_realizadas=r.dispensaciones_realizadas,
