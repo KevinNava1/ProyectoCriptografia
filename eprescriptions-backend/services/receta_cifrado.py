@@ -1,4 +1,16 @@
-"""Cifrado de receta: AES-128-GCM + RSA-OAEP wrap de DEK para paciente y farmacias."""
+"""Cifrado de receta: cifrado híbrido AES-128-GCM + RSA-OAEP por destinatario.
+
+Patrón clásico:
+  1. Generamos una DEK aleatoria (clave simétrica de un solo uso).
+  2. Ciframos la receta UNA vez con AES-GCM usando esa DEK.
+  3. Envolvemos la DEK con la pub RSA de cada destinatario (paciente + cada
+     farmacia activa). Resultado: N copias chicas de la DEK + 1 copia grande
+     del ciphertext.
+
+Alternativa naive: cifrar la receta entera con RSA contra cada destinatario.
+RSA es 100x-1000x más lento que AES y tiene límite de tamaño por bloque.
+El híbrido nos da O(receta) en cifrado simétrico + O(N · 256B) en wraps RSA.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -28,5 +40,8 @@ def cifrar_y_envolver(
         c_wrap_pac = rsa_oaep_encrypt(pac_pub_pem, dek)
         c_wraps_far = [(fid, rsa_oaep_encrypt(pem, dek)) for fid, pem in farmacias_pub]
     finally:
-        dek = b"\x00" * 16  # best-effort scrub
+        # Sobrescribimos la DEK en memoria. No es garantía contra dumps de
+        # heap (Python copia bytes inmutables), pero limita la ventana en
+        # la que un dump capturaría la DEK útil.
+        dek = b"\x00" * 16
     return Envolturas(ct, tag, iv, c_wrap_pac, c_wraps_far)

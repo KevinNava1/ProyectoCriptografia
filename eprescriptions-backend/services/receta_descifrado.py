@@ -1,6 +1,9 @@
 """Descifrado de receta: RSA-OAEP unwrap + AES-128-GCM decrypt.
 
-Cualquier fallo criptográfico devuelve un 400 genérico — sin exponer oráculos.
+Reglas de error: cualquier fallo cripto se mapea a UN solo mensaje genérico.
+No diferenciamos "OAEP falló" de "TAG no cuadra" — exponer ese detalle daría
+un oráculo al atacante (sabría si su manipulación afectó al wrap o al cuerpo).
+Mismo principio que está detrás de Bleichenbacher y de los padding oracles.
 """
 from __future__ import annotations
 
@@ -24,7 +27,9 @@ def descifrar(
     """Devuelve (contenido_dict, plaintext_bytes).
 
     Los bytes brutos son los mismos que firmó el médico (R canónico) y se
-    necesitan para verificar la firma ECDSA sin re-canonicalización.
+    necesitan para verificar la firma ECDSA sin re-canonicalización — si
+    re-serializáramos el dict, el orden de claves y los espacios podrían
+    diferir y la firma fallaría aunque los datos fueran correctos.
     """
     try:
         dek = rsa_oaep_decrypt(priv_rsa_pem, c_wrap)
@@ -33,6 +38,7 @@ def descifrar(
     try:
         pt = aes_gcm_decrypt(dek, iv, ciphertext, tag, aad)
     except Exception:
+        # Aquí ya tenemos la DEK en memoria — la borramos antes de propagar.
         raise HTTPException(400, _ERR)
     finally:
         dek = b"\x00" * 16

@@ -50,18 +50,30 @@ def _to_out(u: Usuario, **extra) -> UsuarioOutput:
 
 @router.post("/registro", response_model=UsuarioOutput, status_code=201)
 def registrar(datos: UsuarioInput, db: Session = Depends(get_db)):
+    """§1 — Alta de usuario.
+
+    Genera dos pares de llaves (EC y RSA), guarda SOLO las públicas en BD y
+    devuelve las privadas al cliente UNA sola vez. El usuario queda en estado
+    `pendiente` con una solicitud de certificado abierta — necesita aprobación
+    del admin (§2) antes de poder loggear.
+    """
     if not _USERNAME_RE.match(datos.username):
         raise HTTPException(400, "Username solo admite letras, números, '.', '_', '-' (3-40)")
+    # Pre-checks de unicidad con SQL: el constraint UNIQUE de la tabla también
+    # nos cubriría, pero queremos un mensaje claro en español, no un IntegrityError.
     if db.query(Usuario).filter(Usuario.username == datos.username).first():
         raise HTTPException(409, "Ese nombre de usuario ya está en uso")
     if db.query(Usuario).filter(Usuario.email == datos.email).first():
         raise HTTPException(409, "El email ya está registrado")
 
+    # Material criptográfico recién generado para este usuario:
+    #   - EC P-256 → firma de recetas/sellos/acuses/cancelaciones.
+    #   - RSA-2048 → envoltura/desenvoltura de la DEK simétrica.
     par_ec  = generar_par_ecdsa()
     par_rsa = generar_par_rsa()
-    salt_pw = secrets.token_bytes(32)
+    salt_pw = secrets.token_bytes(32)  # salt explícito por exigencia de la spec
     pw_hash = hash_password(datos.password)
-    tok_ver = secrets.token_urlsafe(32)
+    tok_ver = secrets.token_urlsafe(32)  # token para el correo de verificación
 
     nuevo = Usuario(
         username=datos.username, nombre=datos.nombre, email=datos.email,
@@ -70,7 +82,7 @@ def registrar(datos: UsuarioInput, db: Session = Depends(get_db)):
         pub_ec_pem=par_ec.pub_pem, pub_rsa_pem=par_rsa.pub_pem,
     )
     db.add(nuevo)
-    db.flush()
+    db.flush()  # necesitamos `nuevo.id` antes de crear la solicitud
 
     sol = SolicitudCertificado(
         usuario_id=nuevo.id,
@@ -84,8 +96,13 @@ def registrar(datos: UsuarioInput, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(nuevo)
 
+    # El correo se envía DESPUÉS del commit: si SMTP falla, el usuario quedó
+    # creado igualmente (puede pedir reenvío). Al revés sería un usuario
+    # "fantasma" si la transacción de BD se cae después de mandar el correo.
     email_svc.enviar_verificacion(nuevo.email, nuevo.username, tok_ver)
 
+    # Bundle = EC.priv ++ RSA.priv. El frontend lo guarda como un solo archivo
+    # descargable. Esto SOLO sucede en este response — luego nunca más.
     bundle_priv = bundle_pem_privadas(par_ec.priv_pem, par_rsa.priv_pem)
     return _to_out(
         nuevo,
@@ -128,6 +145,8 @@ def reenviar_verificacion(body: _EmailBody, db: Session = Depends(get_db)):
 
 @router.post("/recuperar-password")
 def recuperar_password(body: _EmailBody, db: Session = Depends(get_db)):
+    # Devolvemos `{ok: True}` aunque el email no exista — así no le decimos a
+    # un atacante "este email SÍ está registrado y este NO" (enumeration).
     u = db.query(Usuario).filter(Usuario.email == body.email).first()
     if not u:
         return {"ok": True}
@@ -164,7 +183,19 @@ def reset_password(body: _ResetBody, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=UsuarioOutput)
 def login(datos: LoginInput, db: Session = Depends(get_db)):
+    """§3 — Autenticación multifactor: password + posesión de las dos llaves.
+
+    Una password robada no alcanza para loggear: el cliente además debe
+    aportar sus dos .pem privados. El backend deriva la pública desde cada
+    privada y la compara con la pública registrada en BD; cualquier mismatch
+    devuelve 403 sin emitir JWT.
+
+    El admin se exime del chequeo de llaves porque no opera con criptografía
+    de dominio (no firma recetas ni descifra; solo aprueba solicitudes).
+    """
     u = db.query(Usuario).filter(Usuario.username == datos.username).first()
+    # Mensaje único para "no existe el usuario" y "password incorrecta" — evita
+    # que el atacante distinga entre los dos casos al enumerar usernames.
     if not u or not verify_password(u.password_hash, datos.password):
         raise HTTPException(401, "Usuario o contraseña incorrectos")
     if u.rol != datos.rol:
@@ -174,6 +205,9 @@ def login(datos: LoginInput, db: Session = Depends(get_db)):
     if not u.activo or u.estado != "activo":
         raise HTTPException(403, "Cuenta desactivada o pendiente de aprobación")
 
+    # Necesitamos AL MENOS un cert EC vigente y AL MENOS uno RSA vigente.
+    # Si el admin revocó alguno (suspensión), el login se cae aquí aunque
+    # password y llaves sean correctas.
     now_utc = datetime.now(timezone.utc)
     certs = db.query(Certificado).filter(
         Certificado.usuario_id == u.id,
@@ -181,6 +215,8 @@ def login(datos: LoginInput, db: Session = Depends(get_db)):
     ).all()
 
     def _vigente(c):
+        # MySQL puede devolver datetime sin tzinfo según el driver — normalizamos
+        # a UTC para que la comparación con `now_utc` no truene.
         exp = c.fecha_expiracion
         if exp.tzinfo is None:
             exp = exp.replace(tzinfo=timezone.utc)
@@ -190,6 +226,8 @@ def login(datos: LoginInput, db: Session = Depends(get_db)):
             and any(c.tipo == "rsa" and _vigente(c) for c in certs)):
         raise HTTPException(403, "Tus certificados no están activos")
 
+    # Validación de pertenencia de las llaves (el "factor algo que tienes").
+    # `exigir_*` deriva la pub desde la priv y la compara con la pub en BD.
     if u.rol != "admin":
         if not datos.llave_privada_ec or not datos.llave_privada_rsa:
             raise HTTPException(400, "Faltan tus llaves privadas EC y RSA")
@@ -210,6 +248,12 @@ def buscar_usuarios(
     _user: Usuario = Depends(auth_required),
     db: Session = Depends(get_db),
 ):
+    """Typeahead para que el médico encuentre pacientes al crear receta.
+
+    Requiere JWT (no es un endpoint público). Filtramos a usuarios activos y
+    limitamos el resultado para evitar que un atacante autenticado dump-ee la
+    tabla entera con `q="a"`.
+    """
     needle = f"%{q.strip()}%"
     query = db.query(Usuario).filter(
         Usuario.estado == "activo",
@@ -219,6 +263,7 @@ def buscar_usuarios(
     if rol:
         query = query.filter(Usuario.rol == rol)
     matches = query.order_by(Usuario.username.asc()).limit(limit).all()
+    # Devolvemos lo mínimo para el autocompletado — nunca emails ni llaves.
     return [
         {"id": u.id, "username": u.username, "nombre": u.nombre, "rol": u.rol}
         for u in matches

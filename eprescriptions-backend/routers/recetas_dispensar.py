@@ -1,4 +1,15 @@
-"""§6 — Dispensación de receta + acuse del paciente."""
+"""§6 — Dispensación de receta + acuse del paciente.
+
+Una dispensación tiene DOS firmas sobre el mismo `manifiesto_sello`:
+    - firma_sello       → la pone el farmacéutico al dispensar (síncrono).
+    - firma_paciente    → la pone el paciente al firmar el acuse (asíncrono).
+
+Lock crítico: NO se permite una segunda dispensación mientras la anterior
+tenga `firma_paciente=NULL`. Esto garantiza que cada entrega se cierra con un
+acuse no-repudiable antes de despachar la siguiente. Sin esa puerta, una
+farmacia podría dispensar todos los refills seguidos sin que el paciente
+firme nada.
+"""
 from __future__ import annotations
 
 import json
@@ -86,7 +97,9 @@ def dispensar_receta(
     if r.dispensaciones_realizadas >= r.dispensaciones_permitidas:
         raise HTTPException(400, "Receta sin dispensaciones disponibles")
 
-    # Bloquear si hay un acuse pendiente del paciente.
+    # Lock de no-repudio: si la dispensación anterior aún no tiene firma del
+    # paciente, devolvemos 409 y la farmacia debe esperar. Es la salvaguarda
+    # que asegura que cada refill tiene un acuse asociado antes del siguiente.
     pendiente = next((e for e in r.eventos if e.firma_paciente is None), None)
     if pendiente is not None:
         raise HTTPException(
@@ -95,6 +108,9 @@ def dispensar_receta(
             f"antes de poder dispensar de nuevo.",
         )
 
+    # Si la receta tiene `intervalo_dias`, exigimos esperar ese plazo desde
+    # la última dispensación. Bloquea la farmacia que intente dispensar 5
+    # refills en el mismo día.
     now = datetime.now(timezone.utc)
     if r.intervalo_dias and r.eventos:
         ts = r.eventos[-1].timestamp
@@ -108,6 +124,10 @@ def dispensar_receta(
     ec_priv = bundle.exigir_ec(datos.llave_privada_farmaceutico, user.pub_ec_pem)
     _, rsa_pem = bundle.exigir_rsa(datos.llave_privada_farmaceutico, user.pub_rsa_pem)
 
+    # Cada farmacia activa al momento de emitir la receta tiene su propia
+    # `c_wrap_far` (DEK envuelta con SU pub RSA). Si la farmacia no figura,
+    # significa que se dio de alta DESPUÉS de la emisión y no tiene cómo
+    # descifrar — devolvemos 403 explícito.
     acceso = next((a for a in r.accesos_farmacias if a.farmacia_id == user.id), None)
     if not acceso:
         raise HTTPException(403, "Esta farmacia no está autorizada para dispensar la receta")
@@ -125,6 +145,9 @@ def dispensar_receta(
         dek = b"\x00" * 16
         raise HTTPException(400, _ERR)
 
+    # Verificación criptográfica REAL de la firma del médico antes de aceptar
+    # dispensar. Si el ciphertext fuera maliciosamente alterado, este verify
+    # falla y la farmacia no firma el sello sobre datos manipulados.
     step("§6 DISPENSAR", 3, "ECDSA verify → firma del médico sobre R")
     medico = db.query(Usuario).filter(Usuario.id == r.medico_id).first()
     if not medico or not medico.pub_ec_pem:
@@ -155,6 +178,9 @@ def dispensar_receta(
     db.add(evento)
     db.flush()
 
+    # Avance de la máquina de estados: si llegamos al cupo, queda completa;
+    # si quedan refills, pasa a `en_proceso`. La firma del paciente NO afecta
+    # este avance — es trazabilidad asíncrona, no una transición de estado.
     r.dispensaciones_realizadas = numero
     r.estado = "dispensada_completa" if numero >= r.dispensaciones_permitidas else "en_proceso"
 
@@ -231,10 +257,15 @@ def firmar_evento_paciente(
 
     banner_flow("§6.b ACUSE PACIENTE", "Paciente firma el sello de dispensación con ECDSA")
 
+    # Firmamos exactamente los mismos bytes de `manifiesto_sello` que firmó
+    # la farmacia. Así un verificador externo solo necesita ese blob + dos
+    # pubs (farm + paciente) para reconstruir todo el caso de no-repudio.
     step("§6.b ACUSE", 1, "ECDSA sign → firmar sello con priv EC del paciente")
     ec_priv = bundle.exigir_ec(datos.llave_privada, user.pub_ec_pem)
     firma = ecdsa_sign(ec_priv, bytes(ev.manifiesto_sello))
 
+    # Sanity check: re-verificar la firma que acabamos de generar antes de
+    # persistirla. Captura cualquier corrupción rara entre firmar y guardar.
     step("§6.b ACUSE", 2, "ECDSA verify → comprobar firma recién emitida")
     if not ecdsa_verify(user.pub_ec_pem, bytes(ev.manifiesto_sello), firma):
         raise HTTPException(400, "Firma inválida")

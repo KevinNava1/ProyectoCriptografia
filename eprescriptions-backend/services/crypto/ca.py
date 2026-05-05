@@ -6,6 +6,18 @@
   nonRepudiation; uno para cifrado (RSA) con KeyUsage=keyEncipherment.
 
 Spec §CA_Sign: X.509 v3, KeyUsage crítico, BasicConstraints CA=FALSE en subs.
+
+Decisiones que vale la pena recordar:
+  - `BasicConstraints(ca=True, path_length=0)` en la raíz: solo puede firmar
+    end-entity, NUNCA otra CA. Cero subordinadas — modelo de un nivel.
+  - `BasicConstraints(ca=False)` en cada cert de usuario: aunque alguien le
+    robe la priv a un médico, no puede emitir certs para terceros.
+  - `digitalSignature + nonRepudiation` para EC: el "nonRepudiation" es lo
+    que da peso médico-legal al sello, distinto de una firma técnica.
+  - `keyEncipherment` (no `dataEncipherment`) para RSA: porque la RSA solo se
+    usa para envolver la DEK, no para cifrar el cuerpo del mensaje.
+  - `KeyUsage` se marca como `critical=True`: si un cliente no entiende la
+    extensión, debe rechazar el cert en vez de ignorarla.
 """
 from __future__ import annotations
 
@@ -70,6 +82,8 @@ def _ensure_ca() -> tuple[ec.EllipticCurvePrivateKey, x509.Certificate]:
             serialization.NoEncryption(),
         )
     )
+    # Permisos restrictivos: solo el dueño del proceso puede leer la priv de
+    # la CA. Si esto fuera prod real, además iría cifrada con KMS o HSM.
     CA_KEY_PATH.chmod(0o600)
     CA_CERT_PATH.write_bytes(ca_cert.public_bytes(serialization.Encoding.PEM))
     return ca_key, ca_cert

@@ -1,4 +1,17 @@
-"""§4 — Creación de receta: firma ECDSA del médico + cifrado AES-GCM + wrap RSA-OAEP."""
+"""§4 — Creación de receta: firma ECDSA del médico + cifrado AES-GCM + wrap RSA-OAEP.
+
+Pipeline completo (los `step()` van mostrando cada fase en el log):
+    1. Validar pertenencia de la priv EC del médico (anti-suplantación).
+    2. Resolver paciente y farmacias autorizadas para esta receta.
+    3. INSERT placeholder en BD para reservar el `id_receta` (lo necesitamos
+       dentro del JSON canónico antes de firmar/cifrar).
+    4. Construir R canónico → ECDSA-sign con la priv EC del médico → S_D.
+    5. Construir AAD canónico (los metadatos visibles que el TAG de GCM ata
+       al ciphertext).
+    6. Generar DEK + IV → AES-GCM encrypt(R, AAD) → (ciphertext, TAG).
+    7. RSA-OAEP wrap de la DEK contra la pub RSA del paciente y de cada farmacia.
+    8. UPDATE de la fila placeholder con todos los blobs criptográficos.
+"""
 from __future__ import annotations
 
 from datetime import date
@@ -52,8 +65,11 @@ def crear_receta(
     if not farmacias:
         raise HTTPException(503, "No hay farmacias activas para recibir la receta")
 
-    # Necesitamos el id_receta antes de construir R y AAD, así que insertamos
-    # un placeholder y lo completamos después del cifrado.
+    # Patrón "placeholder + flush": R y AAD incluyen `id_receta`, pero ese id
+    # solo lo conoce MySQL después del INSERT. Así que insertamos una fila con
+    # blobs dummy, hacemos flush para obtener el id, y al terminar el cifrado
+    # actualizamos los campos reales. Todo dentro de la misma transacción —
+    # si algo falla, hace rollback completo y la fila placeholder no queda viva.
     placeholder = Receta(
         medico_id=user.id, paciente_id=paciente.id,
         ciphertext=b"\x00", tag_aes=b"\x00" * 16, iv_aes=b"\x00" * 12,
@@ -79,6 +95,10 @@ def crear_receta(
     step("§4 CREAR", 2, "FIRMAR R con ECDSA P-256 + SHA3-256 → S_D")
     firma_doctor = ecdsa_sign(ec_priv, r_bytes)
 
+    # AAD = "Additional Authenticated Data". Va EN CLARO pero queda atado al
+    # TAG de GCM. Si alguien intenta mover el ciphertext a otra fila (otro
+    # id_receta/id_doctor), el AAD ya no coincide y el descifrado lanza
+    # InvalidTag. Es nuestra protección anti-rebinding del criptograma.
     step("§4 CREAR", 3, "construir AAD canónico")
     aad = canonical_receta.build_AAD(
         id_receta=id_receta, id_doctor=user.id, id_paciente=paciente.id,

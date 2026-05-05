@@ -33,7 +33,7 @@ from .crypto_log import log_aes_decrypt, log_aes_encrypt
 
 
 def new_dek() -> bytes:
-    # 16 bytes = 128 bits → AES-128 (lo que pide la spec; no AES-256).
+    # 16 bytes = 128 bits → AES-128.
     # `secrets.token_bytes` usa el CSPRNG del sistema operativo
     # (getrandom() en Linux), que es el generador correcto para material
     # criptográfico. NO uses random.* — no es seguro.

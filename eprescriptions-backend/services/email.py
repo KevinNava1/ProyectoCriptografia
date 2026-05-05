@@ -1,3 +1,10 @@
+"""Salida SMTP — verificación de email y reset de contraseña.
+
+Si SMTP no está configurado en `.env` (típico en dev/CI), `_send` simplemente
+loggea y vuelve sin lanzar. Esto evita romper el flujo de registro cuando se
+prueba en local sin un servidor SMTP real. En producción es responsabilidad
+del operador setear SMTP_USER/SMTP_PASS o el correo se omite silenciosamente.
+"""
 from __future__ import annotations
 
 import os
@@ -10,6 +17,8 @@ load_dotenv(override=True)
 
 
 def _cfg():
+    # Lectura perezosa: la primera request al servicio llega después de que
+    # uvicorn ya cargó el .env, así que las env vars siempre están listas.
     return {
         "host": os.getenv("SMTP_HOST", "smtp.gmail.com"),
         "port": int(os.getenv("SMTP_PORT", "587")),
@@ -23,6 +32,7 @@ def _cfg():
 def _send(to: str, subject: str, body: str) -> None:
     c = _cfg()
     if not c["user"] or not c["pw"]:
+        # Modo "sin SMTP": no abortamos el endpoint, solo dejamos rastro.
         print(f"[email] SMTP no configurado — correo a {to} omitido")
         return
     msg = MIMEText(body, "plain", "utf-8")
@@ -32,11 +42,14 @@ def _send(to: str, subject: str, body: str) -> None:
     try:
         with smtplib.SMTP(c["host"], c["port"], timeout=10) as s:
             s.ehlo()
+            # STARTTLS obligatorio: no mandamos credenciales SMTP en claro.
             s.starttls()
             s.login(c["user"], c["pw"])
             s.sendmail(c["frm"], [to], msg.as_string())
         print(f"[email] enviado a {to}: {subject}")
     except Exception as e:
+        # Tampoco propagamos errores SMTP: el correo es secundario al flujo
+        # principal (registro/reset). El usuario puede pedir reenvío después.
         print(f"[email] ERROR enviando a {to}: {e}")
 
 

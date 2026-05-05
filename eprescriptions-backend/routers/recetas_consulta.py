@@ -1,4 +1,15 @@
-"""§5 — Consulta de recetas (paciente / médico / farmacéutico) + verificación de firmas."""
+"""§5 — Consulta de recetas (paciente / médico / farmacéutico) + verificación de firmas.
+
+Para PACIENTE y FARMACÉUTICO el flujo siempre es el mismo:
+    1. Tomar el bundle PEM del header X-Priv-Keys.
+    2. Validar pertenencia de la priv RSA (deriva pub → compara con BD).
+    3. Por cada receta en alcance: RSA-OAEP unwrap → AES-GCM decrypt → ECDSA
+       verify de la firma del médico → hidratar al schema de salida.
+
+Para MÉDICO no se descifra el contenido (no tiene la DEK; no la guardamos por
+diseño). Solo devolvemos metadatos (id paciente, hash, firma) y campos en el
+contenido aparecen como `(cifrado)` para señalar que no podemos exponerlos.
+"""
 from __future__ import annotations
 
 import json
@@ -47,13 +58,17 @@ def consultar_recetas_paciente(
     step("§5 CONSULTA", 1, f"descifrar {len(recetas)} receta(s) y verificar firma del médico")
     out: list[RecetaDescifrada] = []
     for r in recetas:
+        # Si una receta vieja tiene blobs corruptos o la priv no corresponde,
+        # la saltamos en silencio — no rompemos el listado entero por una sola.
         try:
             contenido, r_bytes = receta_descifrado.descifrar(
                 rsa_pem, r.c_wrap_pac, r.iv_aes, r.ciphertext, r.tag_aes, bytes(r.aad),
             )
         except HTTPException:
             continue
-        # Verificación REAL de la firma ECDSA del médico sobre el R recién descifrado.
+        # Verificamos la firma del médico sobre los R bytes RECIÉN descifrados
+        # (no sobre un re-canonical) — así detectamos cualquier alteración del
+        # contenido aunque AES-GCM ya valide integridad: defensa en profundidad.
         medico = db.query(Usuario).filter(Usuario.id == r.medico_id).first()
         firma_ok = bool(
             medico and medico.pub_ec_pem
@@ -81,6 +96,10 @@ def consultar_recetas_medico(
         .order_by(Receta.id.desc())
         .all()
     )
+    # El médico no descifra nada: no tenemos su priv RSA en BD por diseño y
+    # las recetas no se cifran contra él. Solo le mostramos metadatos del AAD
+    # (fecha) + estado + firmas. Los campos de contenido aparecen marcados
+    # como "(cifrado)" para dejarlo explícito en la UI.
     out: list[RecetaDescifrada] = []
     for r in recetas:
         aad = json.loads(bytes(r.aad).decode())

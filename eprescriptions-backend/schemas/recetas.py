@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field, constr
 
 
 class RecetaInput(BaseModel):
+    # `paciente_username` y NO `paciente_id`: la UI usa typeahead y el
+    # backend resuelve a id. Evita exponer ids enteros incrementales en URLs.
     paciente_username: constr(strip_whitespace=True, min_length=3, max_length=40)
     medicamento: constr(strip_whitespace=True, min_length=1, max_length=200)
     dosis: constr(strip_whitespace=True, min_length=1, max_length=120)

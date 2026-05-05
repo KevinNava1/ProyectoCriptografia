@@ -1,7 +1,11 @@
 """Conversión de fila `Receta` + contenido descifrado → `RecetaDescifrada`.
 
-Se encarga de resolver usernames (médico, paciente, último farmacéutico) y
-mapear el estado canónico al nombre legacy que espera el frontend.
+Resuelve usernames (médico, paciente, último farmacéutico) para que el frontend
+no tenga que pegarse N requests adicionales por cada listado, y mapea el estado
+canónico al nombre legacy que espera la UI (emitida/dispensada/revocada).
+
+Tolerante a aliases del JSON descifrado: el spec evolucionó y hay recetas
+viejas con `fecha`/`instrucciones` y nuevas con `fecha_creacion`/`indicaciones`.
 """
 from __future__ import annotations
 
@@ -22,6 +26,8 @@ def hidratar(
 ) -> RecetaDescifrada:
     medico = db.query(Usuario).filter(Usuario.id == r.medico_id).first()
     paciente = db.query(Usuario).filter(Usuario.id == r.paciente_id).first()
+    # `eventos` viene ordenado por numero_dispensacion (ver relationship en
+    # database.py), así que el último es la dispensación más reciente.
     last_ev = r.eventos[-1] if r.eventos else None
     farm = None
     if last_ev:

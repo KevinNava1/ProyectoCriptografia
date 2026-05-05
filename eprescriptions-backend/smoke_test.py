@@ -18,6 +18,24 @@ def _rand(n=6):
     return "".join(random.choices(string.ascii_lowercase, k=n))
 
 
+def _marcar_email_verificado(username: str) -> None:
+    """Bypass del flujo de verificación por correo para el smoke test.
+
+    En prod el usuario hace clic en el link del correo (`/usuarios/verificar-email
+    ?token=...`); aquí no hay SMTP corriendo, así que vamos directo a BD.
+    """
+    from database import SessionLocal, Usuario
+    db = SessionLocal()
+    try:
+        u = db.query(Usuario).filter(Usuario.username == username).first()
+        if u and not u.email_verificado:
+            u.email_verificado = True
+            u.token_verificacion = None
+            db.commit()
+    finally:
+        db.close()
+
+
 def reg(rol, username):
     r = requests.post(f"{BASE}/usuarios/registro", json={
         "username": username,
@@ -27,13 +45,22 @@ def reg(rol, username):
         "rol": rol,
     })
     assert r.ok, r.text
+    _marcar_email_verificado(username)
     return r.json()
 
 
-def login(username, rol):
-    r = requests.post(f"{BASE}/usuarios/login", json={
-        "username": username, "password": "secreto123", "rol": rol,
-    })
+def login(username, rol, *, llaves: dict | None = None):
+    """Login con password + (opcional) llaves EC/RSA.
+
+    Para no-admin las llaves son obligatorias por la spec §3 — `llaves` es el
+    dict que devolvió `reg()` (trae `llave_privada_ec` y `llave_privada_rsa`).
+    Para admin se omite porque admin no opera con criptografía de dominio.
+    """
+    payload = {"username": username, "password": "secreto123", "rol": rol}
+    if llaves:
+        payload["llave_privada_ec"]  = llaves["llave_privada_ec"]
+        payload["llave_privada_rsa"] = llaves["llave_privada_rsa"]
+    r = requests.post(f"{BASE}/usuarios/login", json=payload)
     assert r.ok, r.text
     return r.json()
 
@@ -90,9 +117,9 @@ def main():
         assert ok.ok, ok.text
 
     print("[2] Login (ahora sí, con certs emitidos)")
-    dl = login(docu, "medico")
-    pl = login(paci, "paciente")
-    fl = login(farm, "farmaceutico")
+    dl = login(docu, "medico",       llaves=d)
+    pl = login(paci, "paciente",     llaves=p)
+    fl = login(farm, "farmaceutico", llaves=f)
     for x in (dl, pl, fl):
         assert x.get("token"), "falta JWT"
 
@@ -208,8 +235,11 @@ def main():
     assert r.ok, r.text
     print(f"    receta #{rec2['id']} cancelada")
 
-    print("[9] Verificar firmas (sin priv keys — firma del sello farmacéutico)")
-    r = requests.get(f"{BASE}/recetas/{receta['id']}/verificar-firmas")
+    print("[9] Verificar firmas (con JWT del paciente — sin priv keys)")
+    # /verificar-firmas requiere JWT (auth_required) pero NO necesita el bundle:
+    # solo verifica la firma del sello del farmacéutico, que es pública.
+    r = requests.get(f"{BASE}/recetas/{receta['id']}/verificar-firmas",
+                     headers=headers(pl["token"]))
     assert r.ok, r.text
     v = r.json()
     print(f"    aes_ok={v['cifrado_aes_gcm']} · firma_farm={v['farmaceutico'] and v['farmaceutico']['firma_valida']}")
@@ -269,7 +299,7 @@ def main():
 
     print("[12b] Admin SUSPENDE una solicitud (usuario conserva username/email, login=403)")
     sus = f"sus_{tag}"
-    reg("paciente", sus)
+    sus_data = reg("paciente", sus)
     solx = requests.get(f"{BASE}/admin/solicitudes?estado=pendiente", headers=adm_headers).json()
     mia = next((s for s in solx if s["username"] == sus), None)
     assert mia, "no apareció la solicitud del usuario sus_*"
@@ -296,22 +326,26 @@ def main():
     r = requests.post(f"{BASE}/admin/solicitudes/{mia_sus['id']}/aprobar", headers=adm_headers)
     assert r.ok, r.text
     assert r.json()["estado"] == "aprobada"
-    # Login ya debe funcionar.
+    # Login ya debe funcionar (con las MISMAS llaves originales — se conservan).
     r = requests.post(f"{BASE}/usuarios/login",
-                      json={"username": sus, "password": "secreto123", "rol": "paciente"})
+                      json={"username": sus, "password": "secreto123", "rol": "paciente",
+                            "llave_privada_ec":  sus_data["llave_privada_ec"],
+                            "llave_privada_rsa": sus_data["llave_privada_rsa"]})
     assert r.ok, f"login tras reactivar debería funcionar: {r.status_code} {r.text}"
     assert r.json().get("token")
 
     print("[12bc] Admin SUSPENDE a un usuario YA APROBADO sin historial (revoca certs)")
     apb = f"apb_{tag}"
-    reg("paciente", apb)
+    apb_data = reg("paciente", apb)
     pendientes_apb = requests.get(f"{BASE}/admin/solicitudes?estado=pendiente", headers=adm_headers).json()
     sol_apb = next((s for s in pendientes_apb if s["username"] == apb), None)
     assert sol_apb, "no apareció la solicitud apb_*"
     requests.post(f"{BASE}/admin/solicitudes/{sol_apb['id']}/aprobar", headers=adm_headers).raise_for_status()
     # confirmar que login funciona
     rl = requests.post(f"{BASE}/usuarios/login",
-                       json={"username": apb, "password": "secreto123", "rol": "paciente"})
+                       json={"username": apb, "password": "secreto123", "rol": "paciente",
+                             "llave_privada_ec":  apb_data["llave_privada_ec"],
+                             "llave_privada_rsa": apb_data["llave_privada_rsa"]})
     assert rl.ok, f"login post-aprobar falló: {rl.status_code} {rl.text}"
     # ahora suspender desde aprobada
     r = requests.post(f"{BASE}/admin/solicitudes/{sol_apb['id']}/suspender",

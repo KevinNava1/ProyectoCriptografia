@@ -1,4 +1,15 @@
-"""§9 — Sustitución de receta: cancela la original y emite una nueva con parent_id."""
+"""§9 — Sustitución de receta: cancela la original y emite una nueva con parent_id.
+
+Es una operación atómica de dos fases dentro de una sola transacción:
+    Fase 1 → marca la original como `sustituida` y firma su M_cancel con
+             motivo=`sustituida_por_nueva_version` (idéntico flujo que §8).
+    Fase 2 → crea la receta hija con `parent_id` apuntando a la original y
+             repite el pipeline completo de §4 (R + AAD + AES-GCM + RSA wraps).
+
+Si cualquier paso falla, hace rollback completo: ni la cancelación ni la
+nueva quedan persistidas. Eso evita el caso "original cancelada pero la
+sustituta nunca llegó a crearse" que dejaría al paciente sin tratamiento.
+"""
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
@@ -70,6 +81,9 @@ def nueva_version(
     if not farmacias:
         raise HTTPException(503, "No hay farmacias activas")
 
+    # Mismo patrón "placeholder + flush" que §4: necesitamos id_receta antes
+    # de construir R/AAD. La diferencia con §4 es `parent_id=original.id` —
+    # es lo que enlaza la cadena de versiones para auditoría futura.
     placeholder = Receta(
         medico_id=user.id, paciente_id=paciente.id,
         ciphertext=b"\x00", tag_aes=b"\x00" * 16, iv_aes=b"\x00" * 12,

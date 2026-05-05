@@ -1,4 +1,10 @@
-"""§8 — Cancelación de receta: genera M_cancel firmado con ECDSA del médico."""
+"""§8 — Cancelación de receta: genera M_cancel firmado con ECDSA del médico.
+
+La receta cifrada NO se borra al cancelar — queda en BD como evidencia. Solo
+añadimos una fila en `cancelaciones` con el manifiesto firmado y movemos el
+estado a `cancelada`. Así el paciente y el auditor pueden seguir verificando
+qué se canceló, cuándo y por qué motivo, sin perder el historial criptográfico.
+"""
 from __future__ import annotations
 
 from datetime import datetime, timezone

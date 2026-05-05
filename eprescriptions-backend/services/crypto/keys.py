@@ -3,6 +3,15 @@
 - ECDSA SecP256r1 (NIST P-256) — para firmas (spec §ECDSA_Sign).
 - RSA 2048 bits, e=65537 — para envoltura de DEK con OAEP-SHA256.
 
+Sobre `e=65537`: es el exponente público estándar (F4). Es lo bastante grande
+para evitar ataques de exponente bajo y a la vez tiene pocos bits "1" en su
+binario, lo que acelera la verificación. Cualquier sistema serio usa este.
+
+Sobre 2048 bits: el mínimo aceptado por NIST hasta ~2030. Por debajo, un
+adversario con presupuesto estatal podría factorizar; por encima (3072+) las
+firmas son cómodas pero el cifrado es notablemente más lento. 2048 es el
+sweet spot vigente.
+
 El sistema entrega ambas llaves privadas al cliente UNA sola vez, concatenadas
 como un bundle multi-PEM. El frontend ya las muestra como un único bloque de
 texto, así no hay que cambiar el UI del paso de post-registro.
@@ -70,6 +79,10 @@ def parse_pem_bundle(bundle: str) -> Tuple[EllipticCurvePrivateKey | None, RSAPr
 
     Tolera recibir UNA sola llave (e.g. cuando el doctor sube solo su EC para
     firmar). Devuelve (ec_priv_or_None, rsa_priv_or_None).
+
+    Validamos que la curva sea P-256 y que la RSA tenga al menos 2048 bits —
+    si alguien intenta colar una llave débil de fuera, la rechazamos en vez
+    de aceptarla y firmar/cifrar con material insuficiente.
     """
     if not bundle or "BEGIN" not in bundle:
         raise HTTPException(400, "Llave privada con formato PEM inválido")
@@ -77,7 +90,9 @@ def parse_pem_bundle(bundle: str) -> Tuple[EllipticCurvePrivateKey | None, RSAPr
     ec_priv: EllipticCurvePrivateKey | None = None
     rsa_priv: RSAPrivateKey | None = None
 
-    # Fragmentamos por el delimitador PKCS8.
+    # Un PEM válido empieza con `-----BEGIN ... PRIVATE KEY-----` y termina
+    # con su END. El bundle puede tener N bloques concatenados; los partimos
+    # uno por uno y cargamos por separado.
     blocks = _split_pem_blocks(bundle)
     if not blocks:
         raise HTTPException(400, "Llave privada con formato PEM inválido")
