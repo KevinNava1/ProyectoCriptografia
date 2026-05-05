@@ -3,6 +3,7 @@
 Mapea 1:1 la sección §LO QUE NUNCA LLEGA AL SERVIDOR del spec maestro:
 en BD SOLO viven públicas, certificados, criptogramas, firmas y audit logs.
 """
+
 from __future__ import annotations
 
 import os
@@ -10,6 +11,7 @@ from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
@@ -17,7 +19,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    JSON,
     LargeBinary,
     String,
     Text,
@@ -87,12 +88,14 @@ class Usuario(Base):
     fecha_registro = Column(DateTime(timezone=True), server_default=func.now())
     activo = Column(Boolean, default=True, nullable=False)
 
-    email_verificado   = Column(Boolean, default=False, nullable=False)
+    email_verificado = Column(Boolean, default=False, nullable=False)
     token_verificacion = Column(String(64), nullable=True, index=True)
-    token_reset_pw     = Column(String(64), nullable=True, index=True)
-    token_reset_exp    = Column(DateTime(timezone=True), nullable=True)
+    token_reset_pw = Column(String(64), nullable=True, index=True)
+    token_reset_exp = Column(DateTime(timezone=True), nullable=True)
 
-    certificados = relationship("Certificado", back_populates="usuario", cascade="all, delete-orphan")
+    certificados = relationship(
+        "Certificado", back_populates="usuario", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (Index("ix_usuarios_rol_estado", "rol", "estado"),)
 
@@ -106,11 +109,22 @@ class SolicitudCertificado(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     # SET NULL al rechazar/borrar — la solicitud queda como traza histórica
     # con `estado=rechazada` y los campos snapshot rellenados.
-    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, index=True)
+    usuario_id = Column(
+        Integer,
+        ForeignKey("usuarios.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     pub_ec_pem = Column(Text, nullable=False)
     pub_rsa_pem = Column(Text, nullable=False)
     estado = Column(
-        Enum("pendiente", "aprobada", "suspendida", "rechazada", name="estado_solicitud_enum"),
+        Enum(
+            "pendiente",
+            "aprobada",
+            "suspendida",
+            "rechazada",
+            name="estado_solicitud_enum",
+        ),
         nullable=False,
         default="pendiente",
     )
@@ -133,7 +147,12 @@ class Certificado(Base):
     __tablename__ = "certificados"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    usuario_id = Column(
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     tipo = Column(Enum("ec", "rsa", name="cert_tipo_enum"), nullable=False)
     uso = Column(Enum("firma", "cifrado", name="cert_uso_enum"), nullable=False)
     cert_pem = Column(Text, nullable=False)
@@ -179,8 +198,11 @@ class Receta(Base):
 
     estado = Column(
         Enum(
-            "activa", "en_proceso", "dispensada_completa",
-            "cancelada", "sustituida",
+            "activa",
+            "en_proceso",
+            "dispensada_completa",
+            "cancelada",
+            "sustituida",
             name="estado_receta_enum",
         ),
         nullable=False,
@@ -221,7 +243,12 @@ class RecetaAccesoFarmacia(Base):
     __tablename__ = "receta_acceso_farmacias"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    receta_id = Column(Integer, ForeignKey("recetas.id", ondelete="CASCADE"), nullable=False, index=True)
+    receta_id = Column(
+        Integer,
+        ForeignKey("recetas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     farmacia_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False, index=True)
     c_wrap_far = Column(LargeBinary, nullable=False)
 
@@ -239,20 +266,33 @@ class EventoDispensacion(Base):
     `en_proceso`/`dispensada_completa` independientemente de la firma del
     paciente; ésta es solo evidencia adicional.
     """
+
     __tablename__ = "eventos_dispensacion"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    receta_id = Column(Integer, ForeignKey("recetas.id", ondelete="CASCADE"), nullable=False, index=True)
-    farmaceutico_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False, index=True)
+    receta_id = Column(
+        Integer,
+        ForeignKey("recetas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    farmaceutico_id = Column(
+        Integer, ForeignKey("usuarios.id"), nullable=False, index=True
+    )
     numero_dispensacion = Column(Integer, nullable=False)
     fecha_proxima_valida = Column(DateTime(timezone=True), nullable=True)
-    firma_sello = Column(Text, nullable=False)  # S_F (firma farmacéutico, automática al dispensar)
+    firma_sello = Column(
+        Text, nullable=False
+    )  # S_F (firma farmacéutico, automática al dispensar)
     manifiesto_sello = Column(LargeBinary, nullable=False)  # JSON canónico del Sello
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
     # Firma del paciente sobre el mismo `manifiesto_sello` — opcional, asíncrona.
     firma_paciente = Column(Text, nullable=True)
     fecha_firma_paciente = Column(DateTime(timezone=True), nullable=True)
+
+    # Aqui van las observaciones del farmaceutico que esta dispensando
+    observaciones = Column(Text, nullable=True)
 
     receta = relationship("Receta", back_populates="eventos")
 
@@ -265,10 +305,15 @@ class Cancelacion(Base):
     __tablename__ = "cancelaciones"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    receta_id = Column(Integer, ForeignKey("recetas.id", ondelete="CASCADE"), nullable=False, unique=True)
+    receta_id = Column(
+        Integer,
+        ForeignKey("recetas.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
     doctor_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     manifiesto = Column(LargeBinary, nullable=False)  # M_cancel (JSON canónico)
-    firma_cancel = Column(Text, nullable=False)       # S_cancel
+    firma_cancel = Column(Text, nullable=False)  # S_cancel
     timestamp_cancel = Column(DateTime(timezone=True), server_default=func.now())
     motivo = Column(Text, nullable=False)
 
@@ -284,12 +329,28 @@ class AuditLog(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     # SET NULL: cuando un usuario rechazado se borra para liberar username/email,
     # el audit conserva la traza histórica pero queda huérfano de FK.
-    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, index=True)
+    usuario_id = Column(
+        Integer,
+        ForeignKey("usuarios.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     accion = Column(String(48), nullable=False, index=True)
-    id_receta = Column(Integer, ForeignKey("recetas.id", ondelete="SET NULL"), nullable=True, index=True)
+    id_receta = Column(
+        Integer,
+        ForeignKey("recetas.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
-    resultado = Column(Enum("ok", "rechazado", name="audit_resultado_enum"), nullable=False, default="ok")
-    meta = Column("metadata", JSON, nullable=True)  # columna "metadata" en BD (palabra reservada en SA)
+    resultado = Column(
+        Enum("ok", "rechazado", name="audit_resultado_enum"),
+        nullable=False,
+        default="ok",
+    )
+    meta = Column(
+        "metadata", JSON, nullable=True
+    )  # columna "metadata" en BD (palabra reservada en SA)
 
 
 # ═════════════════════════════════════════════════════════════════════

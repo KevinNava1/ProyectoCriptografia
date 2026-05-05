@@ -1,30 +1,92 @@
-import { useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  LayoutDashboard, Pill, FileSignature, ClipboardList,
-  Activity, ShieldCheck, KeyRound, PanelLeftClose, PanelLeftOpen, X, Stamp,
-} from 'lucide-react'
-import { useAuthStore } from '../../store/useAuthStore'
+  LayoutDashboard,
+  Pill,
+  FileSignature,
+  ClipboardList,
+  Activity,
+  ShieldCheck,
+  KeyRound,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
+  Stamp,
+} from "lucide-react";
+import { useAuthStore } from "../../store/useAuthStore";
 
 function linksForRole(role) {
-  const base = [{ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, hint: 'Resumen' }]
-  if (role === 'paciente') {
-    base.push({ to: '/mis-recetas',     label: 'Mis recetas',      icon: Pill,        hint: 'Recetas activas' })
-    base.push({ to: '/dispensaciones',  label: 'Acuses',           icon: Stamp,       hint: 'Firmar entregas' })
-    base.push({ to: '/verificar',       label: 'Verificar firmas', icon: KeyRound,    hint: 'ECDSA · AES-GCM' })
+  const base = [
+    {
+      to: "/dashboard",
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      hint: "Resumen",
+    },
+  ];
+  if (role === "paciente") {
+    base.push({
+      to: "/mis-recetas",
+      label: "Mis recetas",
+      icon: Pill,
+      hint: "Recetas activas",
+    });
+    base.push({
+      to: "/dispensaciones",
+      label: "Acuses",
+      icon: Stamp,
+      hint: "Firmar entregas",
+    });
+    base.push({
+      to: "/verificar",
+      label: "Verificar firmas",
+      icon: KeyRound,
+      hint: "ECDSA · AES-GCM",
+    });
   }
-  if (role === 'medico') {
-    base.push({ to: '/nueva-receta',    label: 'Emitir receta',   icon: FileSignature, hint: 'Firmar nueva' })
-    base.push({ to: '/mis-emitidas',    label: 'Mis emitidas',    icon: ClipboardList, hint: 'Cancelar / sustituir' })
-    base.push({ to: '/dispensaciones',  label: 'Dispensaciones',  icon: Stamp,         hint: 'Histórico (read-only)' })
+  if (role === "medico") {
+    base.push({
+      to: "/nueva-receta",
+      label: "Emitir receta",
+      icon: FileSignature,
+      hint: "Firmar nueva",
+    });
+    base.push({
+      to: "/mis-emitidas",
+      label: "Mis emitidas",
+      icon: ClipboardList,
+      hint: "Cancelar / sustituir",
+    });
+    base.push({
+      to: "/dispensaciones",
+      label: "Dispensaciones",
+      icon: Stamp,
+      hint: "Histórico (read-only)",
+    });
   }
-  if (role === 'farmaceutico') {
-    base.push({ to: '/pendientes',      label: 'Pendientes',     icon: ClipboardList, hint: 'Por dispensar' })
-    base.push({ to: '/dispensaciones',  label: 'Dispensaciones', icon: Stamp,         hint: 'Histórico (read-only)' })
+  if (role === "farmaceutico") {
+    base.push({
+      to: "/pendientes",
+      label: "Pendientes",
+      icon: ClipboardList,
+      hint: "Por dispensar",
+    });
+    base.push({
+      to: "/dispensaciones",
+      label: "Dispensaciones",
+      icon: Stamp,
+      hint: "Histórico (read-only)",
+    });
   }
-  if (role === 'admin')        base.push({ to: '/admin/solicitudes', label: 'Solicitudes',  icon: ShieldCheck,   hint: 'Aprobar / rechazar' })
-  return base
+  if (role === "admin")
+    base.push({
+      to: "/admin/solicitudes",
+      label: "Solicitudes",
+      icon: ShieldCheck,
+      hint: "Aprobar / rechazar",
+    });
+  return base;
 }
 
 function BrandBlock({ expanded }) {
@@ -32,18 +94,23 @@ function BrandBlock({ expanded }) {
     <div className="flex items-center gap-2.5 px-3 py-5 border-b border-[var(--border-subtle)]">
       <motion.div
         whileHover={{ rotate: 14, scale: 1.06 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+        transition={{ type: "spring", stiffness: 260, damping: 18 }}
         className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 relative overflow-hidden"
         style={{
-          background: 'linear-gradient(135deg,#0A84FF 0%,#00B8D9 55%,#0052CC 100%)',
-          boxShadow: '0 6px 18px rgba(10,132,255,0.35), inset 0 0 0 1px rgba(255,255,255,0.25)',
+          background:
+            "linear-gradient(135deg,#0A84FF 0%,#00B8D9 55%,#0052CC 100%)",
+          boxShadow:
+            "0 6px 18px rgba(10,132,255,0.35), inset 0 0 0 1px rgba(255,255,255,0.25)",
         }}
       >
         <Activity size={19} className="text-white relative z-10" />
         <motion.span
           aria-hidden
           className="absolute inset-0"
-          style={{ background: 'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.45), transparent 55%)' }}
+          style={{
+            background:
+              "radial-gradient(circle at 30% 20%, rgba(255,255,255,0.45), transparent 55%)",
+          }}
           animate={{ opacity: [0.4, 0.8, 0.4] }}
           transition={{ duration: 3.2, repeat: Infinity }}
         />
@@ -58,7 +125,9 @@ function BrandBlock({ expanded }) {
             transition={{ duration: 0.18 }}
             className="min-w-0 overflow-hidden"
           >
-            <div className="font-heading text-sm font-bold leading-none whitespace-nowrap">SecureRx</div>
+            <div className="font-heading text-sm font-bold leading-none whitespace-nowrap">
+              SecureRx
+            </div>
             <div className="text-[9px] text-[color:var(--text-secondary)] tracking-[0.18em] uppercase mt-1 whitespace-nowrap">
               e-prescriptions
             </div>
@@ -66,17 +135,17 @@ function BrandBlock({ expanded }) {
         )}
       </AnimatePresence>
     </div>
-  )
+  );
 }
 
 function NavItem({ link, active, expanded, onNavigate }) {
-  const Icon = link.icon
+  const Icon = link.icon;
   return (
     <NavLink
       to={link.to}
       onClick={onNavigate}
       className="group relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors"
-      style={{ color: active ? 'var(--blue-deep)' : 'var(--text-secondary)' }}
+      style={{ color: active ? "var(--blue-deep)" : "var(--text-secondary)" }}
       title={expanded ? undefined : link.label}
     >
       {active && (
@@ -84,28 +153,30 @@ function NavItem({ link, active, expanded, onNavigate }) {
           layoutId="nav-indicator"
           className="absolute inset-0 rounded-xl"
           style={{
-            background: 'linear-gradient(135deg, rgba(10,132,255,0.18), rgba(0,184,217,0.10))',
-            border: '1px solid rgba(10,132,255,0.40)',
-            boxShadow: '0 8px 24px rgba(10,132,255,0.18), inset 0 0 0 1px rgba(255,255,255,0.22)',
+            background:
+              "linear-gradient(135deg, rgba(10,132,255,0.18), rgba(0,184,217,0.10))",
+            border: "1px solid rgba(10,132,255,0.40)",
+            boxShadow:
+              "0 8px 24px rgba(10,132,255,0.18), inset 0 0 0 1px rgba(255,255,255,0.22)",
           }}
-          transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+          transition={{ type: "spring", stiffness: 380, damping: 32 }}
         />
       )}
       {active && (
         <motion.span
           layoutId="nav-accent"
           className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full"
-          style={{ background: 'linear-gradient(180deg,#0A84FF,#00B8D9)' }}
-          transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+          style={{ background: "linear-gradient(180deg,#0A84FF,#00B8D9)" }}
+          transition={{ type: "spring", stiffness: 380, damping: 32 }}
         />
       )}
       <motion.span
         whileHover={{ scale: 1.14, rotate: active ? 0 : -4 }}
         whileTap={{ scale: 0.92 }}
-        transition={{ type: 'spring', stiffness: 420, damping: 18 }}
+        transition={{ type: "spring", stiffness: 420, damping: 18 }}
         className="relative z-10 shrink-0 w-8 h-8 rounded-lg flex items-center justify-center"
         style={{
-          background: active ? 'rgba(10,132,255,0.12)' : 'transparent',
+          background: active ? "rgba(10,132,255,0.12)" : "transparent",
         }}
       >
         <Icon size={16} />
@@ -120,7 +191,9 @@ function NavItem({ link, active, expanded, onNavigate }) {
             transition={{ duration: 0.16 }}
             className="relative z-10 flex-1 min-w-0 overflow-hidden"
           >
-            <div className="text-sm font-medium whitespace-nowrap">{link.label}</div>
+            <div className="text-sm font-medium whitespace-nowrap">
+              {link.label}
+            </div>
             <div className="text-[10px] text-[color:var(--text-secondary)] whitespace-nowrap truncate">
               {link.hint}
             </div>
@@ -130,69 +203,210 @@ function NavItem({ link, active, expanded, onNavigate }) {
       {active && expanded && (
         <motion.span
           className="relative z-10 w-1.5 h-1.5 rounded-full shrink-0"
-          style={{ background: 'var(--cyan)' }}
+          style={{ background: "var(--cyan)" }}
           animate={{ opacity: [0.4, 1, 0.4], scale: [0.9, 1.2, 0.9] }}
           transition={{ duration: 1.4, repeat: Infinity }}
         />
       )}
     </NavLink>
-  )
+  );
 }
 
-function SecurityCard({ expanded }) {
+function UserCard({ expanded }) {
+  const user = useAuthStore((s) => s.user);
+
+  const roleLabel =
+    {
+      medico: "Médico",
+      farmaceutico: "Farmacéutico",
+      paciente: "Paciente",
+      admin: "Administrador",
+    }[user?.rol] || user?.rol;
+
+  const roleColor =
+    {
+      medico: "#0A84FF",
+      farmaceutico: "#00A870",
+      paciente: "#E08700",
+      admin: "#BF5AF2",
+    }[user?.rol] || "#888";
+
+  const roleBg =
+    {
+      medico: "rgba(10,132,255,0.12)",
+      farmaceutico: "rgba(0,168,112,0.12)",
+      paciente: "rgba(224,135,0,0.12)",
+      admin: "rgba(191,90,242,0.12)",
+    }[user?.rol] || "rgba(136,136,136,0.12)";
+
+  const initials =
+    user?.nombre
+      ?.split(" ")
+      .slice(0, 2)
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase() || "?";
+
   return (
-    <div className="m-3 rounded-xl overflow-hidden relative"
-      style={{
-        background: 'linear-gradient(135deg, rgba(10,132,255,0.10), rgba(0,184,217,0.08))',
-        border: '1px solid rgba(10,132,255,0.30)',
-        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.35)',
-      }}
+    <div
+      className="m-3 rounded-2xl overflow-hidden"
+      style={{ border: "0.5px solid rgba(10,132,255,0.25)" }}
     >
-      <motion.span
-        aria-hidden
-        className="absolute inset-0 pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse at 20% 0%, rgba(10,132,255,0.18), transparent 55%)' }}
-        animate={{ opacity: [0.45, 0.8, 0.45] }}
-        transition={{ duration: 4, repeat: Infinity }}
-      />
-      <div className="relative p-3">
-        <div className="flex items-center gap-2">
-          <ShieldCheck size={14} className="text-[color:var(--emerald)] shrink-0" />
+      {/* Header */}
+      <div
+        className="px-3.5 py-2.5 relative overflow-hidden"
+        style={{ background: roleColor }}
+      >
+        <div
+          className="absolute -top-4 -right-4 w-16 h-16 rounded-full"
+          style={{ background: "rgba(255,255,255,0.10)" }}
+        />
+        <div
+          className="absolute -bottom-6 left-14 w-20 h-20 rounded-full"
+          style={{ background: "rgba(255,255,255,0.07)" }}
+        />
+        <div className="relative flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck size={12} color="rgba(255,255,255,0.9)" />
+            <span
+              className="text-[11px] font-medium"
+              style={{
+                color: "rgba(255,255,255,0.9)",
+                letterSpacing: "0.06em",
+              }}
+            >
+              SecureRx
+            </span>
+          </div>
           <AnimatePresence initial={false}>
-            {expanded ? (
+            {expanded && (
               <motion.span
-                key="sec-label"
+                key="brand-sub"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="font-mono"
+                style={{
+                  fontSize: 9,
+                  color: "rgba(255,255,255,0.6)",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                e-prescriptions
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div
+        className="px-3.5 pt-3 pb-2"
+        style={{ background: "var(--color-background-primary, #fff)" }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center font-semibold text-sm shrink-0"
+            style={{
+              background: roleBg,
+              border: `1px solid ${roleColor}44`,
+              color: roleColor,
+            }}
+          >
+            {initials}
+          </div>
+          <AnimatePresence initial={false}>
+            {expanded && (
+              <motion.div
+                key="user-name"
                 initial={{ opacity: 0, x: -6 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -6 }}
-                className="text-[11px] font-semibold whitespace-nowrap"
+                className="min-w-0 overflow-hidden"
               >
-                Sistema seguro
-              </motion.span>
-            ) : null}
+                <div
+                  className="text-[12px] font-semibold truncate leading-tight"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  {user?.nombre}
+                </div>
+                <div
+                  className="text-[10px] truncate font-mono mt-0.5"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  {user?.email}
+                </div>
+              </motion.div>
+            )}
           </AnimatePresence>
-          <span className="dot-pulse ml-auto shrink-0" style={{ width: 6, height: 6 }} />
         </div>
+
         <AnimatePresence initial={false}>
           {expanded && (
             <motion.div
-              key="sec-desc"
+              key="user-footer"
               initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
+              animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="text-[10px] text-[color:var(--text-secondary)] leading-relaxed mt-2 overflow-hidden"
+              className="overflow-hidden"
             >
-              <div className="font-mono">AES-128-GCM</div>
-              <div className="font-mono">ECDSA P-256 + SHA3-256</div>
+              <div
+                className="flex items-center justify-between mt-3 pt-2.5"
+                style={{ borderTop: "0.5px solid rgba(0,0,0,0.07)" }}
+              >
+                <span
+                  className="text-[10px] font-medium px-2.5 py-0.5 rounded-full"
+                  style={{
+                    background: roleBg,
+                    color: roleColor,
+                    border: `0.5px solid ${roleColor}44`,
+                  }}
+                >
+                  {roleLabel}
+                </span>
+                <span
+                  className="text-[10px] font-mono"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  @{user?.username}
+                </span>
+              </div>
+
+              {/* Barra decorativa */}
+              <div className="mt-2.5 pb-1">
+                <div
+                  className="h-1 rounded-sm w-full"
+                  style={{
+                    background: `repeating-linear-gradient(90deg, ${roleColor} 0px, ${roleColor} 3px, transparent 3px, transparent 6px)`,
+                  }}
+                />
+                <div
+                  className="font-mono mt-1"
+                  style={{
+                    fontSize: 9,
+                    color: "var(--color-text-secondary)",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  CREDENCIAL · {String(user?.id || 0).padStart(4, "0")}
+                </div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
     </div>
-  )
+  );
 }
 
-function SidebarBody({ links, currentPath, expanded, onToggle, onNavigate, showToggle = true }) {
+function SidebarBody({
+  links,
+  currentPath,
+  expanded,
+  onToggle,
+  onNavigate,
+  showToggle = true,
+}) {
   return (
     <>
       <BrandBlock expanded={expanded} />
@@ -202,7 +416,9 @@ function SidebarBody({ links, currentPath, expanded, onToggle, onNavigate, showT
           {expanded && (
             <motion.div
               key="nav-label"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               className="label-xs px-3 py-2"
             >
               Navegación
@@ -221,39 +437,43 @@ function SidebarBody({ links, currentPath, expanded, onToggle, onNavigate, showT
       </nav>
 
       <div className="mt-auto">
-        <SecurityCard expanded={expanded} />
+        <UserCard expanded={expanded} />
         {showToggle && (
           <div className="px-2 pb-3">
             <button
               type="button"
               onClick={onToggle}
-              aria-label={expanded ? 'Colapsar menú' : 'Expandir menú'}
+              aria-label={expanded ? "Colapsar menú" : "Expandir menú"}
               className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border text-[11px] font-medium transition-colors"
               style={{
-                background: 'rgba(255,255,255,0.45)',
-                borderColor: 'var(--border-subtle)',
-                color: 'var(--text-secondary)',
+                background: "rgba(255,255,255,0.45)",
+                borderColor: "var(--border-subtle)",
+                color: "var(--text-secondary)",
               }}
             >
-              {expanded ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
+              {expanded ? (
+                <PanelLeftClose size={14} />
+              ) : (
+                <PanelLeftOpen size={14} />
+              )}
             </button>
           </div>
         )}
       </div>
     </>
-  )
+  );
 }
 
 export default function Sidebar({ mobileOpen = false, onMobileClose }) {
-  const user = useAuthStore(s => s.user)
-  const location = useLocation()
-  const links = linksForRole(user?.rol)
+  const user = useAuthStore((s) => s.user);
+  const location = useLocation();
+  const links = linksForRole(user?.rol);
 
   // Por defecto colapsado; el rail se expande mientras el cursor esté encima.
   // El toggle inferior permite pinnear (mantener expandido) si el usuario lo desea.
-  const [pinned, setPinned] = useState(false)
-  const [hovered, setHovered] = useState(false)
-  const expanded = pinned || hovered
+  const [pinned, setPinned] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const expanded = pinned || hovered;
 
   return (
     <>
@@ -261,16 +481,17 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }) {
       <motion.aside
         className="hidden md:flex shrink-0 flex-col sticky top-0 h-screen z-20 overflow-hidden"
         style={{
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(244,249,255,0.78) 100%)',
-          backdropFilter: 'blur(22px) saturate(1.15)',
-          WebkitBackdropFilter: 'blur(22px) saturate(1.15)',
-          borderRight: '1px solid var(--border-subtle)',
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(244,249,255,0.78) 100%)",
+          backdropFilter: "blur(22px) saturate(1.15)",
+          WebkitBackdropFilter: "blur(22px) saturate(1.15)",
+          borderRight: "1px solid var(--border-subtle)",
           boxShadow: expanded
-            ? '8px 0 36px rgba(10,36,67,0.08), inset -1px 0 0 rgba(10,132,255,0.05)'
-            : '4px 0 18px rgba(10,36,67,0.04), inset -1px 0 0 rgba(10,132,255,0.05)',
+            ? "8px 0 36px rgba(10,36,67,0.08), inset -1px 0 0 rgba(10,132,255,0.05)"
+            : "4px 0 18px rgba(10,36,67,0.04), inset -1px 0 0 rgba(10,132,255,0.05)",
         }}
         animate={{ width: expanded ? 248 : 74 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+        transition={{ type: "spring", stiffness: 260, damping: 30 }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
@@ -279,14 +500,15 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }) {
           aria-hidden
           className="absolute top-0 right-0 bottom-0 w-[2px] opacity-70"
           style={{
-            background: 'linear-gradient(180deg, transparent 0%, rgba(10,132,255,0.35) 35%, rgba(0,184,217,0.35) 65%, transparent 100%)',
+            background:
+              "linear-gradient(180deg, transparent 0%, rgba(10,132,255,0.35) 35%, rgba(0,184,217,0.35) 65%, transparent 100%)",
           }}
         />
         <SidebarBody
           links={links}
           currentPath={location.pathname}
           expanded={expanded}
-          onToggle={() => setPinned(p => !p)}
+          onToggle={() => setPinned((p) => !p)}
         />
       </motion.aside>
 
@@ -297,8 +519,13 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }) {
             <motion.div
               key="overlay"
               className="md:hidden fixed inset-0 z-40"
-              style={{ background: 'rgba(10,36,67,0.42)', backdropFilter: 'blur(4px)' }}
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              style={{
+                background: "rgba(10,36,67,0.42)",
+                backdropFilter: "blur(4px)",
+              }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               onClick={onMobileClose}
               aria-hidden
             />
@@ -306,22 +533,24 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }) {
               key="drawer"
               className="md:hidden fixed top-0 left-0 bottom-0 z-50 w-72 flex flex-col overflow-hidden"
               style={{
-                background: 'linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(244,249,255,0.88) 100%)',
-                backdropFilter: 'blur(22px) saturate(1.15)',
-                WebkitBackdropFilter: 'blur(22px) saturate(1.15)',
-                borderRight: '1px solid var(--border-subtle)',
-                boxShadow: '16px 0 60px rgba(10,36,67,0.24)',
+                background:
+                  "linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(244,249,255,0.88) 100%)",
+                backdropFilter: "blur(22px) saturate(1.15)",
+                WebkitBackdropFilter: "blur(22px) saturate(1.15)",
+                borderRight: "1px solid var(--border-subtle)",
+                boxShadow: "16px 0 60px rgba(10,36,67,0.24)",
               }}
               initial={{ x: -300 }}
               animate={{ x: 0 }}
               exit={{ x: -300 }}
-              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              transition={{ type: "spring", stiffness: 320, damping: 32 }}
             >
               <div
                 aria-hidden
                 className="absolute top-0 right-0 bottom-0 w-[2px]"
                 style={{
-                  background: 'linear-gradient(180deg, transparent, rgba(10,132,255,0.5), rgba(0,184,217,0.5), transparent)',
+                  background:
+                    "linear-gradient(180deg, transparent, rgba(10,132,255,0.5), rgba(0,184,217,0.5), transparent)",
                 }}
               />
               <button
@@ -344,5 +573,5 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }) {
         )}
       </AnimatePresence>
     </>
-  )
+  );
 }
