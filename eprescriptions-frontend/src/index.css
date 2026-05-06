@@ -489,7 +489,17 @@ input[type="checkbox"] {
 }
 
 /* ─────────── Accesibilidad: reducir animación ─────────── */
+/* Aplica WCAG 2.1 SC 2.3.3 — usuarios con `prefers-reduced-motion: reduce`
+   no deben ver animaciones que distraigan o causen mareo. Apagamos TODAS
+   las transiciones y keyframes (incluyendo las que inyecta framer-motion
+   vía transform/transition) reduciéndolas a ~0ms. */
 @media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
   .aurora-blob,
   .spin-slow, .spin-mid,
   .float-slow, .float-mid, .float-fast,

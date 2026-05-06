@@ -44,6 +44,14 @@ services:
       ADMIN_NOMBRE: ${ADMIN_NOMBRE:-Administrador}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@securerx.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # SMTP — sin defaults: si no están seteadas en .env, el servicio email
+      # entra en modo "no configurado" y omite los correos en silencio.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      APP_URL: ${APP_URL:-http://localhost:5173}
     volumes:
       - ca-data:/app/ca
     # SIN ports: el api ya no se expone al host. Solo nginx (443) habla con él

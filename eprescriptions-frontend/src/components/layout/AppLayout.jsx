@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
-import AuroraBackground from '../3d/AuroraBackground'
-import VideoBackdrop from '../3d/VideoBackdrop'
-import MedicalVortex3D from '../3d/MedicalVortex3D'
+// Las capas decorativas 3D pesan ~600KB de three.js. Lazy-load las hace
+// asíncronas: el shell (sidebar + header + main) renderiza inmediatamente
+// y los efectos llegan después sin bloquear interacción.
+const AuroraBackground = lazy(() => import('../3d/AuroraBackground'))
+const VideoBackdrop    = lazy(() => import('../3d/VideoBackdrop'))
+const MedicalVortex3D  = lazy(() => import('../3d/MedicalVortex3D'))
 
 export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -24,24 +27,28 @@ export default function AppLayout() {
       className="relative min-h-screen w-full flex"
       style={{ background: 'var(--bg-primary)' }}
     >
-      {/* Capa 1 — Video loop muteado (coherente con el login) */}
-      <div className="fixed inset-0 pointer-events-none" aria-hidden>
-        <VideoBackdrop intensity="soft" />
-      </div>
+      <Suspense fallback={null}>
+        {/* Capa 1 — Video loop muteado (coherente con el login) */}
+        <div className="fixed inset-0 pointer-events-none" aria-hidden>
+          <VideoBackdrop intensity="soft" />
+        </div>
 
-      {/* Capa 2 — Aurora blobs */}
-      <div className="fixed inset-0 pointer-events-none" aria-hidden>
-        <AuroraBackground variant="subtle" />
-      </div>
+        {/* Capa 2 — Aurora blobs */}
+        <div className="fixed inset-0 pointer-events-none" aria-hidden>
+          <AuroraBackground variant="subtle" />
+        </div>
 
-      {/* Capa 3 — Vórtice médico 3D de acento (desplazado, sutil) */}
-      <div
-        className="fixed pointer-events-none opacity-60"
-        style={{ top: '-15%', right: '-20%', width: '760px', height: '760px' }}
-        aria-hidden
-      >
-        <MedicalVortex3D />
-      </div>
+        {/* Capa 3 — Vórtice médico 3D de acento (desplazado, sutil).
+            Oculto en mobile: en pantallas chicas un vórtice 3D
+            ocupando 760px no aporta y solo come batería. */}
+        <div
+          className="hidden md:block fixed pointer-events-none opacity-60"
+          style={{ top: '-15%', right: '-20%', width: '760px', height: '760px' }}
+          aria-hidden
+        >
+          <MedicalVortex3D />
+        </div>
+      </Suspense>
 
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
 

@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { LogIn, AtSign, Lock, Wifi, WifiOff, ShieldCheck } from 'lucide-react'
-import AuroraBackground from '../components/3d/AuroraBackground'
-import VideoBackdrop from '../components/3d/VideoBackdrop'
-import MedicalVortex3D from '../components/3d/MedicalVortex3D'
-import Pill3DOrbit from '../components/3d/Pill3DOrbit'
+// 3D / video → lazy: pesan ~600KB de three.js + assets de video. Se cargan
+// asíncronos para no bloquear el render inicial de la card de login. Si el
+// usuario tiene la conexión justa, los efectos llegan tarde pero el form
+// es interactivo desde el primer paint.
+const AuroraBackground = lazy(() => import('../components/3d/AuroraBackground'))
+const VideoBackdrop    = lazy(() => import('../components/3d/VideoBackdrop'))
+const MedicalVortex3D  = lazy(() => import('../components/3d/MedicalVortex3D'))
+const Pill3DOrbit      = lazy(() => import('../components/3d/Pill3DOrbit'))
+const MedicalScene     = lazy(() => import('../components/illustrations/MedicalScene'))
 import ShieldLogo from '../components/3d/ShieldLogo'
-import MedicalScene from '../components/illustrations/MedicalScene'
 import { DoctorLogo, PatientLogo, PharmacistLogo } from '../components/illustrations/RoleLogos'
 import PageTransition from '../components/ui/PageTransition'
 import HeartbeatLine from '../components/ui/HeartbeatLine'
@@ -102,26 +106,28 @@ export default function Login() {
   return (
     <PageTransition>
       <div className="relative min-h-screen flex items-start sm:items-center justify-center overflow-hidden pt-6 pb-36 sm:pt-10 sm:pb-32 px-4">
-        <VideoBackdrop intensity="soft" />
-        <AuroraBackground variant="subtle" />
+        <Suspense fallback={null}>
+          <VideoBackdrop intensity="soft" />
+          <AuroraBackground variant="subtle" />
 
-        <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-          style={{ width: 'min(1100px, 110vw)', height: 'min(900px, 100vh)' }}
-          aria-hidden
-        >
-          <MedicalVortex3D />
-        </div>
+          <div
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ width: 'min(1100px, 110vw)', height: 'min(900px, 100vh)' }}
+            aria-hidden
+          >
+            <MedicalVortex3D />
+          </div>
 
-        <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-          style={{ width: 'min(860px, 96vw)', height: 'min(860px, 88vh)' }}
-          aria-hidden
-        >
-          <MedicalScene variant="stethoscope" />
-          <Pill3DOrbit radius={270} duration={22} size={140} />
-          <Pill3DOrbit radius={270} duration={22} size={110} delay={-11} />
-        </div>
+          <div
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ width: 'min(860px, 96vw)', height: 'min(860px, 88vh)' }}
+            aria-hidden
+          >
+            <MedicalScene variant="stethoscope" />
+            <Pill3DOrbit radius={270} duration={22} size={140} />
+            <Pill3DOrbit radius={270} duration={22} size={110} delay={-11} />
+          </div>
+        </Suspense>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}

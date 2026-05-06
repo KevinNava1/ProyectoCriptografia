@@ -74,7 +74,11 @@ app.include_router(health.router)
 app.include_router(usuarios.router)               # §1, §3
 app.include_router(admin.router)                  # §2 (admin-in-the-loop)
 app.include_router(recetas_crear.router)          # §4
-app.include_router(recetas_consulta.router)      # §5
+# Importante: dispensar se registra ANTES que consulta. Ambos comparten prefix
+# `/recetas/...`. consulta tiene un catch-all `/{receta_id}` que de otro modo
+# se traga rutas estáticas de dispensar como `/recetas/eventos-dispensacion`
+# y devuelve 422 al intentar parsear la cadena como int.
 app.include_router(recetas_dispensar.router)     # §6
+app.include_router(recetas_consulta.router)      # §5
 app.include_router(recetas_cancelar.router)      # §8
 app.include_router(recetas_nueva_version.router)  # §9 (sustitución por nueva versión)

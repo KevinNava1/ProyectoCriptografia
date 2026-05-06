@@ -1,15 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, lazy, Suspense } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import JSZip from 'jszip'
 import { AlertTriangle, ArrowRight, UserPlus, Download, AtSign, KeyRound, Globe, Package, Check, Mail } from 'lucide-react'
-import AuroraBackground from '../components/3d/AuroraBackground'
-import VideoBackdrop from '../components/3d/VideoBackdrop'
-import MedicalVortex3D from '../components/3d/MedicalVortex3D'
+const AuroraBackground = lazy(() => import('../components/3d/AuroraBackground'))
+const VideoBackdrop    = lazy(() => import('../components/3d/VideoBackdrop'))
+const MedicalVortex3D  = lazy(() => import('../components/3d/MedicalVortex3D'))
+const Pill3DOrbit      = lazy(() => import('../components/3d/Pill3DOrbit'))
+const MedicalScene     = lazy(() => import('../components/illustrations/MedicalScene'))
 import ShieldLogo from '../components/3d/ShieldLogo'
-import Pill3DOrbit from '../components/3d/Pill3DOrbit'
-import MedicalScene from '../components/illustrations/MedicalScene'
 import { DoctorLogo, PatientLogo, PharmacistLogo } from '../components/illustrations/RoleLogos'
 import PageTransition from '../components/ui/PageTransition'
 import { splitPemBundle } from '../lib/utils'
@@ -124,28 +124,30 @@ correspondientes. Las públicas ya están registradas en el servidor.
   return (
     <PageTransition>
       <div className="relative min-h-screen flex items-center justify-center overflow-hidden py-8 sm:py-10 px-4">
-        <VideoBackdrop intensity="soft" />
-        <AuroraBackground variant="subtle" />
+        <Suspense fallback={null}>
+          <VideoBackdrop intensity="soft" />
+          <AuroraBackground variant="subtle" />
 
-        {/* Vórtice médico 3D detrás del formulario */}
-        <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-          style={{ width: 'min(1100px, 110vw)', height: 'min(900px, 100vh)' }}
-          aria-hidden
-        >
-          <MedicalVortex3D />
-        </div>
+          {/* Vórtice médico 3D detrás del formulario */}
+          <div
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ width: 'min(1100px, 110vw)', height: 'min(900px, 100vh)' }}
+            aria-hidden
+          >
+            <MedicalVortex3D />
+          </div>
 
-        {/* Escena SVG sin píldoras planas + dos Pill3D reales orbitando */}
-        <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-          style={{ width: 'min(860px, 96vw)', height: 'min(860px, 88vh)' }}
-          aria-hidden
-        >
-          <MedicalScene variant="capsules" />
-          <Pill3DOrbit radius={270} duration={22} size={140} />
-          <Pill3DOrbit radius={270} duration={22} size={110} delay={-11} />
-        </div>
+          {/* Escena SVG sin píldoras planas + dos Pill3D reales orbitando */}
+          <div
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ width: 'min(860px, 96vw)', height: 'min(860px, 88vh)' }}
+            aria-hidden
+          >
+            <MedicalScene variant="capsules" />
+            <Pill3DOrbit radius={270} duration={22} size={140} />
+            <Pill3DOrbit radius={270} duration={22} size={110} delay={-11} />
+          </div>
+        </Suspense>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}

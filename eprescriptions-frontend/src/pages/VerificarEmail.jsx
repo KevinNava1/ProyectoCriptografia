@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { CheckCircle, XCircle, Loader } from 'lucide-react'
-import AuroraBackground from '../components/3d/AuroraBackground'
-import VideoBackdrop from '../components/3d/VideoBackdrop'
+const AuroraBackground = lazy(() => import('../components/3d/AuroraBackground'))
+const VideoBackdrop    = lazy(() => import('../components/3d/VideoBackdrop'))
 import ShieldLogo from '../components/3d/ShieldLogo'
 import PageTransition from '../components/ui/PageTransition'
 import { usuariosAPI } from '../api'
@@ -24,15 +24,17 @@ export default function VerificarEmail() {
   return (
     <PageTransition>
       <div className="relative min-h-screen flex items-center justify-center overflow-hidden px-4">
-        <VideoBackdrop intensity="soft" />
-        <AuroraBackground variant="subtle" />
+        <Suspense fallback={null}>
+          <VideoBackdrop intensity="soft" />
+          <AuroraBackground variant="subtle" />
+        </Suspense>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="relative z-10 w-full max-w-md"
         >
-          <div className="secure-card p-8 text-center">
+          <div className="secure-card p-6 sm:p-8 text-center">
             <div className="flex justify-center mb-5">
               <ShieldLogo size={56} />
             </div>

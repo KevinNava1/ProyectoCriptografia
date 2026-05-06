@@ -247,6 +247,37 @@ function UserCard({ expanded }) {
       .join("")
       .toUpperCase() || "?";
 
+  // Variante compacta: cuando el sidebar está colapsado (74px), la card
+  // completa no cabe — el header con texto + el avatar de 40px desbordan.
+  // Renderizamos solo el avatar centrado con el color del rol.
+  if (!expanded) {
+    return (
+      <div className="flex justify-center px-2 py-3">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center font-semibold text-sm relative"
+          style={{
+            background: roleBg,
+            border: `1px solid ${roleColor}66`,
+            color: roleColor,
+            boxShadow: `0 4px 12px ${roleColor}22`,
+          }}
+          title={`${user?.nombre || ""} · ${roleLabel}`}
+          aria-label={`${user?.nombre || ""}, ${roleLabel}`}
+        >
+          {initials}
+          <span
+            aria-hidden
+            className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
+            style={{
+              background: roleColor,
+              borderColor: "var(--bg-primary, #EEF4FB)",
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="m-3 rounded-2xl overflow-hidden"

@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Mail, Lock, ArrowRight, CheckCircle } from 'lucide-react'
-import AuroraBackground from '../components/3d/AuroraBackground'
-import VideoBackdrop from '../components/3d/VideoBackdrop'
+const AuroraBackground = lazy(() => import('../components/3d/AuroraBackground'))
+const VideoBackdrop    = lazy(() => import('../components/3d/VideoBackdrop'))
 import ShieldLogo from '../components/3d/ShieldLogo'
 import PageTransition from '../components/ui/PageTransition'
 import { usuariosAPI } from '../api'
@@ -36,15 +36,17 @@ function SolicitarForm() {
   return (
     <PageTransition>
       <div className="relative min-h-screen flex items-center justify-center overflow-hidden px-4">
-        <VideoBackdrop intensity="soft" />
-        <AuroraBackground variant="subtle" />
+        <Suspense fallback={null}>
+          <VideoBackdrop intensity="soft" />
+          <AuroraBackground variant="subtle" />
+        </Suspense>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="relative z-10 w-full max-w-md"
         >
-          <div className="secure-card p-8">
+          <div className="secure-card p-6 sm:p-8">
             <div className="flex items-center gap-3 mb-7">
               <ShieldLogo size={48} />
               <div>
@@ -129,15 +131,17 @@ function ResetForm({ token }) {
   return (
     <PageTransition>
       <div className="relative min-h-screen flex items-center justify-center overflow-hidden px-4">
-        <VideoBackdrop intensity="soft" />
-        <AuroraBackground variant="subtle" />
+        <Suspense fallback={null}>
+          <VideoBackdrop intensity="soft" />
+          <AuroraBackground variant="subtle" />
+        </Suspense>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="relative z-10 w-full max-w-md"
         >
-          <div className="secure-card p-8">
+          <div className="secure-card p-6 sm:p-8">
             <div className="flex items-center gap-3 mb-7">
               <ShieldLogo size={48} />
               <div>

@@ -340,7 +340,7 @@ def recetas_dispensables_por_paciente(
         if not acceso:
             continue
         try:
-            contenido = receta_descifrado.descifrar(
+            contenido, r_bytes = receta_descifrado.descifrar(
                 rsa_pem,
                 acceso.c_wrap_far,
                 r.iv_aes,
@@ -350,7 +350,12 @@ def recetas_dispensables_por_paciente(
             )
         except HTTPException:
             continue
-        out.append(hidratar(r, contenido, db))
+        medico = db.query(Usuario).filter(Usuario.id == r.medico_id).first()
+        firma_ok = bool(
+            medico and medico.pub_ec_pem
+            and ecdsa_verify(medico.pub_ec_pem, r_bytes, r.firma_doctor)
+        )
+        out.append(hidratar(r, contenido, db, firma_medico_ok=firma_ok))
     return out
 
 
@@ -386,7 +391,7 @@ def consultar_receta_por_id(
     bundle_pem = bundle.desde_header(x_priv_keys)
     _, rsa_pem = bundle.exigir_rsa(bundle_pem, user.pub_rsa_pem)
 
-    contenido = receta_descifrado.descifrar(
+    contenido, r_bytes = receta_descifrado.descifrar(
         rsa_pem,
         acceso.c_wrap_far,
         r.iv_aes,
@@ -394,4 +399,9 @@ def consultar_receta_por_id(
         r.tag_aes,
         bytes(r.aad),
     )
-    return hidratar(r, contenido, db)
+    medico = db.query(Usuario).filter(Usuario.id == r.medico_id).first()
+    firma_ok = bool(
+        medico and medico.pub_ec_pem
+        and ecdsa_verify(medico.pub_ec_pem, r_bytes, r.firma_doctor)
+    )
+    return hidratar(r, contenido, db, firma_medico_ok=firma_ok)
