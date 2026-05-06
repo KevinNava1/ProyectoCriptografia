@@ -1,4 +1,5 @@
 """Schemas del dominio de recetas (§4, §5, §6, §8, §9)."""
+
 from __future__ import annotations
 
 from typing import Optional
@@ -56,6 +57,7 @@ class RecetaDescifrada(BaseModel):
 
 class DispensarInput(BaseModel):
     llave_privada_farmaceutico: str  # bundle PEM EC + RSA
+    observaciones: Optional[str] = None  # Same sht,
 
 
 class CancelarInput(BaseModel):
@@ -64,9 +66,12 @@ class CancelarInput(BaseModel):
 
 
 class NuevaVersionInput(RecetaInput):
-    motivo_sustitucion: constr(strip_whitespace=True, min_length=3, max_length=400) = "actualizacion_terapeutica"
+    motivo_sustitucion: constr(strip_whitespace=True, min_length=3, max_length=400) = (
+        "actualizacion_terapeutica"
+    )
 
 
 class FirmarTicketInput(BaseModel):
     """Paciente aporta su priv_ec para firmar el acuse de dispensación."""
+
     llave_privada: str  # bundle (EC del actor)

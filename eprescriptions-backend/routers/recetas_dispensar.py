@@ -16,18 +16,17 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
-
 from audit import registrar as audit_log
 from auth import auth_required, require_roles
 from database import EventoDispensacion, Receta, Usuario, get_db
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from schemas.recetas import DispensarInput, FirmarTicketInput
 from services import bundle, canonical_receta
 from services.crypto import aes_gcm_decrypt, ecdsa_sign, ecdsa_verify, rsa_oaep_decrypt
 from services.crypto.crypto_log import banner_flow, step
 from services.estados import es_dispensable, to_legacy
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/recetas", tags=["recetas"])
 
@@ -50,13 +49,22 @@ class TicketDispensacionSalida(BaseModel):
     fecha_firma_paciente: Optional[datetime] = None
     firma_farmaceutico: str
     firma_paciente: Optional[str] = None
+    observaciones: Optional[str] = None  # Leer observaciones
 
 
 def _evento_to_salida(ev: EventoDispensacion, db: Session) -> TicketDispensacionSalida:
     receta = db.query(Receta).filter(Receta.id == ev.receta_id).first()
     farm = db.query(Usuario).filter(Usuario.id == ev.farmaceutico_id).first()
-    pac  = db.query(Usuario).filter(Usuario.id == receta.paciente_id).first() if receta else None
-    med  = db.query(Usuario).filter(Usuario.id == receta.medico_id).first() if receta else None
+    pac = (
+        db.query(Usuario).filter(Usuario.id == receta.paciente_id).first()
+        if receta
+        else None
+    )
+    med = (
+        db.query(Usuario).filter(Usuario.id == receta.medico_id).first()
+        if receta
+        else None
+    )
     return TicketDispensacionSalida(
         id=ev.id,
         receta_id=ev.receta_id,
@@ -72,6 +80,7 @@ def _evento_to_salida(ev: EventoDispensacion, db: Session) -> TicketDispensacion
         fecha_firma_paciente=ev.fecha_firma_paciente,
         firma_farmaceutico=ev.firma_sello,
         firma_paciente=ev.firma_paciente,
+        observaciones=ev.observaciones,
     )
 
 
@@ -79,12 +88,16 @@ def _evento_to_salida(ev: EventoDispensacion, db: Session) -> TicketDispensacion
 def dispensar_receta(
     receta_id: int,
     datos: DispensarInput,
-    farmaceutico_id: int = Query(..., description="ID del farmacéutico (debe coincidir con JWT)"),
+    farmaceutico_id: int = Query(
+        ..., description="ID del farmacéutico (debe coincidir con JWT)"
+    ),
     user: Usuario = Depends(require_roles("farmaceutico")),
     db: Session = Depends(get_db),
 ):
-    banner_flow("§6 DISPENSAR",
-                "RSA-OAEP unwrap → AES-GCM decrypt → ECDSA verify médico → ECDSA sign sello")
+    banner_flow(
+        "§6 DISPENSAR",
+        "RSA-OAEP unwrap → AES-GCM decrypt → ECDSA verify médico → ECDSA sign sello",
+    )
 
     if farmaceutico_id != user.id:
         raise HTTPException(403, "farmaceutico_id no coincide con la sesión")
@@ -118,7 +131,9 @@ def dispensar_receta(
             ts = ts.replace(tzinfo=timezone.utc)
         prox = ts + timedelta(days=r.intervalo_dias)
         if now < prox:
-            raise HTTPException(400, f"Dispensación bloqueada. Próxima fecha válida: {prox.isoformat()}")
+            raise HTTPException(
+                400, f"Dispensación bloqueada. Próxima fecha válida: {prox.isoformat()}"
+            )
 
     step("§6 DISPENSAR", 0, "validar pertenencia de llaves EC y RSA del farmacéutico")
     ec_priv = bundle.exigir_ec(datos.llave_privada_farmaceutico, user.pub_ec_pem)
@@ -130,7 +145,9 @@ def dispensar_receta(
     # descifrar — devolvemos 403 explícito.
     acceso = next((a for a in r.accesos_farmacias if a.farmacia_id == user.id), None)
     if not acceso:
-        raise HTTPException(403, "Esta farmacia no está autorizada para dispensar la receta")
+        raise HTTPException(
+            403, "Esta farmacia no está autorizada para dispensar la receta"
+        )
 
     step("§6 DISPENSAR", 1, "RSA-OAEP unwrap → DEK")
     try:
@@ -161,7 +178,8 @@ def dispensar_receta(
 
     step("§6 DISPENSAR", 4, "construir Sello + ECDSA sign → S_F")
     sello_bytes = canonical_receta.build_sello(
-        id_farmaceutico=user.id, id_receta=r.id,
+        id_farmaceutico=user.id,
+        id_receta=r.id,
         numero_dispensacion=numero,
         dispensaciones_permitidas=r.dispensaciones_permitidas,
         timestamp_iso=now.isoformat(),
@@ -171,9 +189,14 @@ def dispensar_receta(
 
     proxima = now + timedelta(days=r.intervalo_dias) if r.intervalo_dias else None
     evento = EventoDispensacion(
-        receta_id=r.id, farmaceutico_id=user.id,
-        numero_dispensacion=numero, fecha_proxima_valida=proxima,
-        firma_sello=s_f, manifiesto_sello=sello_bytes, timestamp=now,
+        receta_id=r.id,
+        farmaceutico_id=user.id,
+        numero_dispensacion=numero,
+        fecha_proxima_valida=proxima,
+        firma_sello=s_f,
+        manifiesto_sello=sello_bytes,
+        timestamp=now,
+        observaciones=datos.observaciones,  # Extra para las observaciones :p
     )
     db.add(evento)
     db.flush()
@@ -182,10 +205,15 @@ def dispensar_receta(
     # si quedan refills, pasa a `en_proceso`. La firma del paciente NO afecta
     # este avance — es trazabilidad asíncrona, no una transición de estado.
     r.dispensaciones_realizadas = numero
-    r.estado = "dispensada_completa" if numero >= r.dispensaciones_permitidas else "en_proceso"
+    r.estado = (
+        "dispensada_completa" if numero >= r.dispensaciones_permitidas else "en_proceso"
+    )
 
     audit_log(
-        db, usuario_id=user.id, accion="dispensacion", id_receta=r.id,
+        db,
+        usuario_id=user.id,
+        accion="dispensacion",
+        id_receta=r.id,
         metadata={"numero_dispensacion": numero, "de": r.dispensaciones_permitidas},
     )
     db.commit()
@@ -206,40 +234,65 @@ def dispensar_receta(
     }
 
 
-@router.get("/eventos-dispensacion", response_model=list[TicketDispensacionSalida],
-            tags=["dispensacion-tickets"])
+@router.get(
+    "/eventos-dispensacion",
+    response_model=list[TicketDispensacionSalida],
+    tags=["dispensacion-tickets"],
+)
 def listar_eventos_paciente(
     user: Usuario = Depends(auth_required),
     db: Session = Depends(get_db),
 ):
     if user.rol == "paciente":
-        q = db.query(EventoDispensacion).join(Receta).filter(Receta.paciente_id == user.id)
+        q = (
+            db.query(EventoDispensacion)
+            .join(Receta)
+            .filter(Receta.paciente_id == user.id)
+        )
     elif user.rol == "farmaceutico":
-        q = db.query(EventoDispensacion).filter(EventoDispensacion.farmaceutico_id == user.id)
+        q = db.query(EventoDispensacion).filter(
+            EventoDispensacion.farmaceutico_id == user.id
+        )
     elif user.rol == "medico":
-        q = db.query(EventoDispensacion).join(Receta).filter(Receta.medico_id == user.id)
+        q = (
+            db.query(EventoDispensacion)
+            .join(Receta)
+            .filter(Receta.medico_id == user.id)
+        )
     else:
         return []
-    return [_evento_to_salida(ev, db) for ev in q.order_by(EventoDispensacion.timestamp.desc()).all()]
+    return [
+        _evento_to_salida(ev, db)
+        for ev in q.order_by(EventoDispensacion.timestamp.desc()).all()
+    ]
 
 
-@router.get("/eventos-dispensacion/pendientes", response_model=list[TicketDispensacionSalida],
-            tags=["dispensacion-tickets"])
+@router.get(
+    "/eventos-dispensacion/pendientes",
+    response_model=list[TicketDispensacionSalida],
+    tags=["dispensacion-tickets"],
+)
 def listar_pendientes_paciente(
     user: Usuario = Depends(require_roles("paciente")),
     db: Session = Depends(get_db),
 ):
     eventos = (
-        db.query(EventoDispensacion).join(Receta)
-        .filter(Receta.paciente_id == user.id, EventoDispensacion.firma_paciente.is_(None))
+        db.query(EventoDispensacion)
+        .join(Receta)
+        .filter(
+            Receta.paciente_id == user.id, EventoDispensacion.firma_paciente.is_(None)
+        )
         .order_by(EventoDispensacion.timestamp.desc())
         .all()
     )
     return [_evento_to_salida(ev, db) for ev in eventos]
 
 
-@router.post("/eventos-dispensacion/{evento_id}/firmar-paciente",
-             response_model=TicketDispensacionSalida, tags=["dispensacion-tickets"])
+@router.post(
+    "/eventos-dispensacion/{evento_id}/firmar-paciente",
+    response_model=TicketDispensacionSalida,
+    tags=["dispensacion-tickets"],
+)
 def firmar_evento_paciente(
     evento_id: int,
     datos: FirmarTicketInput,
@@ -255,7 +308,9 @@ def firmar_evento_paciente(
     if ev.firma_paciente:
         raise HTTPException(409, "Ya firmaste este ticket")
 
-    banner_flow("§6.b ACUSE PACIENTE", "Paciente firma el sello de dispensación con ECDSA")
+    banner_flow(
+        "§6.b ACUSE PACIENTE", "Paciente firma el sello de dispensación con ECDSA"
+    )
 
     # Firmamos exactamente los mismos bytes de `manifiesto_sello` que firmó
     # la farmacia. Así un verificador externo solo necesita ese blob + dos
@@ -270,11 +325,14 @@ def firmar_evento_paciente(
     if not ecdsa_verify(user.pub_ec_pem, bytes(ev.manifiesto_sello), firma):
         raise HTTPException(400, "Firma inválida")
 
-    ev.firma_paciente      = firma
+    ev.firma_paciente = firma
     ev.fecha_firma_paciente = datetime.now(timezone.utc)
 
     audit_log(
-        db, usuario_id=user.id, accion="firma_ticket_dispensacion", id_receta=ev.receta_id,
+        db,
+        usuario_id=user.id,
+        accion="firma_ticket_dispensacion",
+        id_receta=ev.receta_id,
         metadata={"evento_id": ev.id, "numero_dispensacion": ev.numero_dispensacion},
     )
     db.commit()
@@ -282,7 +340,9 @@ def firmar_evento_paciente(
     return _evento_to_salida(ev, db)
 
 
-@router.get("/eventos-dispensacion/{evento_id}/verificar", tags=["dispensacion-tickets"])
+@router.get(
+    "/eventos-dispensacion/{evento_id}/verificar", tags=["dispensacion-tickets"]
+)
 def verificar_evento(
     evento_id: int,
     user: Usuario = Depends(auth_required),
@@ -302,9 +362,9 @@ def verificar_evento(
     if user.rol == "medico" and receta.medico_id != user.id:
         raise HTTPException(403, "No emitiste la receta de esta dispensación")
 
-    medico       = db.query(Usuario).filter(Usuario.id == receta.medico_id).first()
+    medico = db.query(Usuario).filter(Usuario.id == receta.medico_id).first()
     farmaceutico = db.query(Usuario).filter(Usuario.id == ev.farmaceutico_id).first()
-    paciente     = db.query(Usuario).filter(Usuario.id == receta.paciente_id).first()
+    paciente = db.query(Usuario).filter(Usuario.id == receta.paciente_id).first()
 
     try:
         aad = json.loads(bytes(receta.aad).decode())
@@ -325,7 +385,9 @@ def verificar_evento(
 
     firma_farm_ok = False
     if farmaceutico and farmaceutico.pub_ec_pem and ev.firma_sello:
-        firma_farm_ok = ecdsa_verify(farmaceutico.pub_ec_pem, sello_bytes, ev.firma_sello)
+        firma_farm_ok = ecdsa_verify(
+            farmaceutico.pub_ec_pem, sello_bytes, ev.firma_sello
+        )
 
     firma_pac_ok = None
     if ev.firma_paciente and paciente and paciente.pub_ec_pem:
@@ -336,7 +398,9 @@ def verificar_evento(
         "receta_id": receta.id,
         "numero_dispensacion": ev.numero_dispensacion,
         "timestamp": ev.timestamp.isoformat() if ev.timestamp else None,
-        "fecha_firma_paciente": ev.fecha_firma_paciente.isoformat() if ev.fecha_firma_paciente else None,
+        "fecha_firma_paciente": ev.fecha_firma_paciente.isoformat()
+        if ev.fecha_firma_paciente
+        else None,
         "estado_acuse": "completo" if ev.firma_paciente else "pendiente_paciente",
         "cifrado_aes_gcm": aad_ok,
         "medico": {
@@ -344,22 +408,37 @@ def verificar_evento(
             "llave_publica": medico.pub_ec_pem, "firma_valida": firma_medico_ok,
             "nota_firma": "Verificable solo tras descifrar R con priv_rsa del destinatario.",
             "firma": receta.firma_doctor,
-        } if medico else None,
+        }
+        if medico
+        else None,
         "farmaceutico": {
-            "id": farmaceutico.id, "username": farmaceutico.username, "nombre": farmaceutico.nombre,
-            "llave_publica": farmaceutico.pub_ec_pem, "firma_valida": firma_farm_ok,
+            "id": farmaceutico.id,
+            "username": farmaceutico.username,
+            "nombre": farmaceutico.nombre,
+            "llave_publica": farmaceutico.pub_ec_pem,
+            "firma_valida": firma_farm_ok,
             "firma": ev.firma_sello,
-        } if farmaceutico else None,
+        }
+        if farmaceutico
+        else None,
         "paciente": {
-            "id": paciente.id, "username": paciente.username, "nombre": paciente.nombre,
-            "llave_publica": paciente.pub_ec_pem, "firma_valida": firma_pac_ok,
+            "id": paciente.id,
+            "username": paciente.username,
+            "nombre": paciente.nombre,
+            "llave_publica": paciente.pub_ec_pem,
+            "firma_valida": firma_pac_ok,
             "firma": ev.firma_paciente,
-        } if paciente else None,
+        }
+        if paciente
+        else None,
     }
 
 
-@router.get("/{receta_id}/eventos-dispensacion", response_model=list[TicketDispensacionSalida],
-            tags=["dispensacion-tickets"])
+@router.get(
+    "/{receta_id}/eventos-dispensacion",
+    response_model=list[TicketDispensacionSalida],
+    tags=["dispensacion-tickets"],
+)
 def listar_eventos_de_receta(
     receta_id: int,
     user: Usuario = Depends(auth_required),

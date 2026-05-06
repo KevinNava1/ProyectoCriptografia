@@ -15,18 +15,17 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy.orm import Session
-
 from audit import registrar as audit_log
 from auth import auth_required, require_roles
 from database import EventoDispensacion, Receta, Usuario, get_db
+from fastapi import APIRouter, Depends, Header, HTTPException
 from schemas.recetas import RecetaDescifrada
 from services import bundle, receta_descifrado
 from services.crypto import ecdsa_verify
 from services.crypto.crypto_log import banner_flow, step
 from services.estados import to_legacy
 from services.hidratador import hidratar
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/recetas", tags=["recetas"])
 
@@ -41,8 +40,10 @@ def consultar_recetas_paciente(
     if paciente_id != user.id:
         raise HTTPException(403, "No puedes consultar recetas de otro paciente")
 
-    banner_flow("§5 CONSULTA PACIENTE",
-                "Paciente recupera DEK con su priv RSA (RSA-OAEP) y descifra R (AES-GCM)")
+    banner_flow(
+        "§5 CONSULTA PACIENTE",
+        "Paciente recupera DEK con su priv RSA (RSA-OAEP) y descifra R (AES-GCM)",
+    )
 
     step("§5 CONSULTA", 0, "validar pertenencia de la priv RSA (bundle)")
     bundle_pem = bundle.desde_header(x_priv_keys)
@@ -76,7 +77,12 @@ def consultar_recetas_paciente(
         )
         out.append(hidratar(r, contenido, db, firma_medico_ok=firma_ok))
 
-    audit_log(db, usuario_id=user.id, accion="consulta_receta", metadata={"cantidad": len(out)})
+    audit_log(
+        db,
+        usuario_id=user.id,
+        accion="consulta_receta",
+        metadata={"cantidad": len(out)},
+    )
     db.commit()
     return out
 
@@ -105,23 +111,34 @@ def consultar_recetas_medico(
         aad = json.loads(bytes(r.aad).decode())
         paciente = db.query(Usuario).filter(Usuario.id == r.paciente_id).first()
         last_ev = r.eventos[-1] if r.eventos else None
-        farm = db.query(Usuario).filter(Usuario.id == last_ev.farmaceutico_id).first() if last_ev else None
-        out.append(RecetaDescifrada(
-            id=r.id, medico_id=r.medico_id, paciente_id=r.paciente_id,
-            medico_username=user.username,
-            paciente_username=paciente.username if paciente else None,
-            farmaceutico_id=farm.id if farm else None,
-            farmaceutico_username=farm.username if farm else None,
-            fecha=aad.get("fecha_creacion", ""),
-            medicamento="(cifrado)", dosis="(cifrado)", cantidad=0, instrucciones="",
-            estado=to_legacy(r.estado),
-            hash_sha3=r.hash_sha3_hex,
-            firma_medico=r.firma_doctor,
-            firma_farmaceutico=last_ev.firma_sello if last_ev else None,
-            dispensaciones_permitidas=r.dispensaciones_permitidas,
-            dispensaciones_realizadas=r.dispensaciones_realizadas,
-            parent_id=r.parent_id,
-        ))
+        farm = (
+            db.query(Usuario).filter(Usuario.id == last_ev.farmaceutico_id).first()
+            if last_ev
+            else None
+        )
+        out.append(
+            RecetaDescifrada(
+                id=r.id,
+                medico_id=r.medico_id,
+                paciente_id=r.paciente_id,
+                medico_username=user.username,
+                paciente_username=paciente.username if paciente else None,
+                farmaceutico_id=farm.id if farm else None,
+                farmaceutico_username=farm.username if farm else None,
+                fecha=aad.get("fecha_creacion", ""),
+                medicamento="(cifrado)",
+                dosis="(cifrado)",
+                cantidad=0,
+                instrucciones="",
+                estado=to_legacy(r.estado),
+                hash_sha3=r.hash_sha3_hex,
+                firma_medico=r.firma_doctor,
+                firma_farmaceutico=last_ev.firma_sello if last_ev else None,
+                dispensaciones_permitidas=r.dispensaciones_permitidas,
+                dispensaciones_realizadas=r.dispensaciones_realizadas,
+                parent_id=r.parent_id,
+            )
+        )
     return out
 
 
@@ -135,21 +152,33 @@ def consultar_recetas_farmaceutico(
     if farmaceutico_id != user.id:
         raise HTTPException(403, "No puedes consultar recetas de otra farmacia")
 
-    banner_flow("§5 HISTÓRICO FARMACIA",
-                "Farmacéutico descifra recetas dispensadas (RSA-OAEP → AES-GCM)")
+    banner_flow(
+        "§5 HISTÓRICO FARMACIA",
+        "Farmacéutico descifra recetas dispensadas (RSA-OAEP → AES-GCM)",
+    )
 
     bundle_pem = bundle.desde_header(x_priv_keys)
     _, rsa_pem = bundle.exigir_rsa(bundle_pem, user.pub_rsa_pem)
 
-    eventos = db.query(EventoDispensacion).filter(
-        EventoDispensacion.farmaceutico_id == user.id,
-    ).all()
+    eventos = (
+        db.query(EventoDispensacion)
+        .filter(
+            EventoDispensacion.farmaceutico_id == user.id,
+        )
+        .all()
+    )
     ids = {e.receta_id for e in eventos}
-    recetas = db.query(Receta).filter(Receta.id.in_(ids)).order_by(Receta.id.desc()).all() if ids else []
+    recetas = (
+        db.query(Receta).filter(Receta.id.in_(ids)).order_by(Receta.id.desc()).all()
+        if ids
+        else []
+    )
 
     out: list[RecetaDescifrada] = []
     for r in recetas:
-        acceso = next((a for a in r.accesos_farmacias if a.farmacia_id == user.id), None)
+        acceso = next(
+            (a for a in r.accesos_farmacias if a.farmacia_id == user.id), None
+        )
         if not acceso:
             continue
         try:
@@ -173,8 +202,9 @@ def listar_recetas_pendientes(
     user: Usuario = Depends(require_roles("farmaceutico")),
     db: Session = Depends(get_db),
 ):
-    banner_flow("§5 PENDIENTES FARMACIA",
-                "Farmacéutico descifra recetas activas/en_proceso")
+    banner_flow(
+        "§5 PENDIENTES FARMACIA", "Farmacéutico descifra recetas activas/en_proceso"
+    )
 
     bundle_pem = bundle.desde_header(x_priv_keys)
     _, rsa_pem = bundle.exigir_rsa(bundle_pem, user.pub_rsa_pem)
@@ -187,7 +217,9 @@ def listar_recetas_pendientes(
     )
     out: list[RecetaDescifrada] = []
     for r in recetas:
-        acceso = next((a for a in r.accesos_farmacias if a.farmacia_id == user.id), None)
+        acceso = next(
+            (a for a in r.accesos_farmacias if a.farmacia_id == user.id), None
+        )
         if not acceso:
             continue
         try:
@@ -230,7 +262,8 @@ def verificar_firmas(
     last_ev = r.eventos[-1] if r.eventos else None
     farmaceutico = (
         db.query(Usuario).filter(Usuario.id == last_ev.farmaceutico_id).first()
-        if last_ev else None
+        if last_ev
+        else None
     )
 
     try:
@@ -242,7 +275,9 @@ def verificar_firmas(
     firma_farm_ok = None
     if farmaceutico and last_ev:
         firma_farm_ok = ecdsa_verify(
-            farmaceutico.pub_ec_pem, bytes(last_ev.manifiesto_sello), last_ev.firma_sello,
+            farmaceutico.pub_ec_pem,
+            bytes(last_ev.manifiesto_sello),
+            last_ev.firma_sello,
         )
 
     return {
@@ -265,5 +300,98 @@ def verificar_firmas(
             "nombre": farmaceutico.nombre,
             "llave_publica": farmaceutico.pub_ec_pem,
             "firma_valida": firma_farm_ok,
-        } if farmaceutico else None,
+        }
+        if farmaceutico
+        else None,
     }
+
+
+# Endpoint para buscar recetas por usuario
+@router.get("/paciente/{paciente_id}/pendientes", response_model=list[RecetaDescifrada])
+def recetas_dispensables_por_paciente(
+    paciente_id: int,
+    x_priv_keys: Optional[str] = Header(default=None, alias="X-Priv-Keys"),
+    user: Usuario = Depends(require_roles("farmaceutico")),
+    db: Session = Depends(get_db),
+):
+    banner_flow(
+        "§5 BUSCAR POR PACIENTE",
+        "Farmacéutico lista recetas dispensables de un paciente",
+    )
+
+    bundle_pem = bundle.desde_header(x_priv_keys)
+    _, rsa_pem = bundle.exigir_rsa(bundle_pem, user.pub_rsa_pem)
+
+    recetas = (
+        db.query(Receta)
+        .filter(
+            Receta.paciente_id == paciente_id,
+            Receta.estado.in_(("activa", "en_proceso")),
+        )
+        .order_by(Receta.id.desc())
+        .all()
+    )
+
+    out: list[RecetaDescifrada] = []
+    for r in recetas:
+        acceso = next(
+            (a for a in r.accesos_farmacias if a.farmacia_id == user.id), None
+        )
+        if not acceso:
+            continue
+        try:
+            contenido = receta_descifrado.descifrar(
+                rsa_pem,
+                acceso.c_wrap_far,
+                r.iv_aes,
+                r.ciphertext,
+                r.tag_aes,
+                bytes(r.aad),
+            )
+        except HTTPException:
+            continue
+        out.append(hidratar(r, contenido, db))
+    return out
+
+
+# Endpoint para buscar una receta pero por ID
+@router.get("/{receta_id}", response_model=RecetaDescifrada)
+def consultar_receta_por_id(
+    receta_id: int,
+    x_priv_keys: Optional[str] = Header(default=None, alias="X-Priv-Keys"),
+    user: Usuario = Depends(require_roles("farmaceutico")),
+    db: Session = Depends(get_db),
+):
+    banner_flow(
+        "§5 BUSCAR POR ID",
+        "Farmacéutico busca receta específica por ID (RSA-OAEP → AES-GCM)",
+    )
+
+    r = db.query(Receta).filter(Receta.id == receta_id).first()
+    if not r:
+        raise HTTPException(404, "Receta no encontrada")
+
+    if r.estado not in ("activa", "en_proceso"):
+        # Aqui falta hacer un diccionario para los estados, se ve mal imprimir los estados en crudo xd
+        raise HTTPException(
+            409, f"La receta no está disponible para dispensar (estado: {r.estado})"
+        )
+
+    acceso = next((a for a in r.accesos_farmacias if a.farmacia_id == user.id), None)
+    if not acceso:
+        raise HTTPException(
+            403, "Esta receta no tiene acceso para tu farmacia"
+        )  # Redundante, ni siquiera existe la clase farmacia
+
+    bundle_pem = bundle.desde_header(x_priv_keys)
+    _, rsa_pem = bundle.exigir_rsa(bundle_pem, user.pub_rsa_pem)
+
+    contenido = receta_descifrado.descifrar(
+        rsa_pem,
+        acceso.c_wrap_far,
+        r.iv_aes,
+        r.ciphertext,
+        r.tag_aes,
+        bytes(r.aad),
+    )
+    return hidratar(r, contenido, db)
