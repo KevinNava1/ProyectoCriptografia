@@ -16,7 +16,7 @@ export default defineConfig({
       // se reenvían al nginx (TLS 1.3) corriendo en https://localhost.
       // `secure: false` acepta el cert auto-firmado del nginx local.
       '/api': {
-        target: 'https://localhost:8000',
+        target: 'https://localhost',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, '')
