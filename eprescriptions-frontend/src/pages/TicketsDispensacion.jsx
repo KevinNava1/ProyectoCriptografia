@@ -450,8 +450,10 @@ function DispensacionesList({
 }
 
 function EventoCard({ ev, role, user, onSign, onDetail }) {
-  const meta =
-    ev.estado === "completo"
+  const tampered = ev.cripto_ok === false;
+  const meta = tampered
+    ? { label: "Sello no verificado", color: "#B42318", bg: "rgba(180,35,24,0.10)" }
+    : ev.estado === "completo"
       ? { label: "Acuse firmado", color: "#00775A", bg: "rgba(0,168,112,0.10)" }
       : role === "paciente"
         ? {
@@ -465,10 +467,14 @@ function EventoCard({ ev, role, user, onSign, onDetail }) {
             bg: "rgba(224,135,0,0.10)",
           };
 
+  // Solo se firma el acuse si el sello del farmacéutico verifica.
+  // Si tampered=true, el backend de todos modos rechazaría con 409,
+  // pero deshabilitamos el botón en UI para feedback inmediato.
   const canSign =
     role === "paciente" &&
     ev.estado === "pendiente_paciente" &&
-    ev.paciente_id === user.id;
+    ev.paciente_id === user.id &&
+    !tampered;
 
   return (
     <SecureCard className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
@@ -527,6 +533,16 @@ function EventoCard({ ev, role, user, onSign, onDetail }) {
             <FirmaDot label="farmacéutico" ok={!!ev.firma_farmaceutico} />
             <FirmaDot label="paciente" ok={!!ev.firma_paciente} />
           </div>
+          {tampered && (
+            <div
+              className="mt-2 p-2 rounded-md text-[11px]"
+              style={{ background: "rgba(180,35,24,0.08)", border: "1px solid rgba(180,35,24,0.45)", color: "#7A1F12" }}
+            >
+              <strong style={{ color: "#B42318" }}>Sello criptográfico inválido. </strong>
+              {ev.motivo_no_verificada
+                || "La firma ECDSA del farmacéutico no verifica contra el manifiesto. No firmes el acuse."}
+            </div>
+          )}
         </div>
       </div>
 
@@ -543,11 +559,13 @@ function EventoCard({ ev, role, user, onSign, onDetail }) {
           </motion.button>
         ) : (
           <span className="text-[11px] text-[color:var(--text-secondary)] italic">
-            {ev.estado === "completo"
-              ? "Acuse firmado"
-              : role === "paciente"
-                ? "Pendiente de tu firma"
-                : "Pendiente del paciente"}
+            {tampered
+              ? "Acuse bloqueado · sello inválido"
+              : ev.estado === "completo"
+                ? "Acuse firmado"
+                : role === "paciente"
+                  ? "Pendiente de tu firma"
+                  : "Pendiente del paciente"}
           </span>
         )}
         <motion.button

@@ -223,21 +223,15 @@ function UserCard({ expanded }) {
       admin: "Administrador",
     }[user?.rol] || user?.rol;
 
-  const roleColor =
-    {
-      medico: "#0A84FF",
-      farmaceutico: "#00A870",
-      paciente: "#E08700",
-      admin: "#BF5AF2",
-    }[user?.rol] || "#888";
-
-  const roleBg =
-    {
-      medico: "rgba(10,132,255,0.12)",
-      farmaceutico: "rgba(0,168,112,0.12)",
-      paciente: "rgba(224,135,0,0.12)",
-      admin: "rgba(191,90,242,0.12)",
-    }[user?.rol] || "rgba(136,136,136,0.12)";
+  // Identidad visual unificada: el card adopta la paleta de marca
+  // (cyan/teal/blue-deep) para todos los roles. El rol se sigue comunicando
+  // por la pill textual ("Médico", "Administrador", …) — ya no por color.
+  const brandPrimary = "#0A84FF";
+  const brandDeep = "#0052CC";
+  const brandGradient =
+    "linear-gradient(135deg,#0A84FF 0%,#00B8D9 55%,#0052CC 100%)";
+  const roleColor = brandPrimary;
+  const roleBg = "rgba(10,132,255,0.12)";
 
   const initials =
     user?.nombre
@@ -286,7 +280,7 @@ function UserCard({ expanded }) {
       {/* Header */}
       <div
         className="px-3.5 py-2.5 relative overflow-hidden"
-        style={{ background: roleColor }}
+        style={{ background: brandGradient }}
       >
         <div
           className="absolute -top-4 -right-4 w-16 h-16 rounded-full"
@@ -389,7 +383,7 @@ function UserCard({ expanded }) {
                   className="text-[10px] font-medium px-2.5 py-0.5 rounded-full"
                   style={{
                     background: roleBg,
-                    color: roleColor,
+                    color: brandDeep,
                     border: `0.5px solid ${roleColor}44`,
                   }}
                 >
@@ -408,7 +402,7 @@ function UserCard({ expanded }) {
                 <div
                   className="h-1 rounded-sm w-full"
                   style={{
-                    background: `repeating-linear-gradient(90deg, ${roleColor} 0px, ${roleColor} 3px, transparent 3px, transparent 6px)`,
+                    background: `repeating-linear-gradient(90deg, ${brandPrimary} 0px, ${brandPrimary} 3px, transparent 3px, transparent 6px)`,
                   }}
                 />
                 <div

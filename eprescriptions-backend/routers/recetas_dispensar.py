@@ -19,7 +19,7 @@ from typing import Optional
 from audit import registrar as audit_log
 from auth import auth_required, require_roles
 from database import EventoDispensacion, Receta, Usuario, get_db
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from schemas.recetas import DispensarInput, FirmarTicketInput
 from services import bundle, canonical_receta
@@ -50,6 +50,11 @@ class TicketDispensacionSalida(BaseModel):
     firma_farmaceutico: str
     firma_paciente: Optional[str] = None
     observaciones: Optional[str] = None  # Leer observaciones
+    # cripto_ok: ECDSA-verify(pub_ec_farm, sello_bytes, firma_farmaceutico).
+    # Si False, el sello del farmacéutico no verifica → ticket comprometido,
+    # la UI debe bloquear la firma del paciente y mostrar alerta.
+    cripto_ok: bool = True
+    motivo_no_verificada: Optional[str] = None
 
 
 def _evento_to_salida(ev: EventoDispensacion, db: Session) -> TicketDispensacionSalida:
@@ -65,6 +70,25 @@ def _evento_to_salida(ev: EventoDispensacion, db: Session) -> TicketDispensacion
         if receta
         else None
     )
+
+    # Verificación del sello: ECDSA verify de la firma del farmacéutico sobre
+    # el manifiesto canónico. Si alguien tocó manifiesto_sello o firma_sello
+    # en BD, este verify falla y marcamos el ticket como NO verificado.
+    cripto_ok = True
+    motivo = None
+    if farm and farm.pub_ec_pem and ev.firma_sello and ev.manifiesto_sello:
+        cripto_ok = ecdsa_verify(
+            farm.pub_ec_pem, bytes(ev.manifiesto_sello), ev.firma_sello
+        )
+        if not cripto_ok:
+            motivo = (
+                "El sello digital del farmacéutico no verifica contra el "
+                "manifiesto. Dispensación posiblemente manipulada."
+            )
+    elif not ev.firma_sello or not ev.manifiesto_sello:
+        cripto_ok = False
+        motivo = "Falta firma o manifiesto del sello en este ticket."
+
     return TicketDispensacionSalida(
         id=ev.id,
         receta_id=ev.receta_id,
@@ -81,6 +105,8 @@ def _evento_to_salida(ev: EventoDispensacion, db: Session) -> TicketDispensacion
         firma_farmaceutico=ev.firma_sello,
         firma_paciente=ev.firma_paciente,
         observaciones=ev.observaciones,
+        cripto_ok=cripto_ok,
+        motivo_no_verificada=motivo,
     )
 
 
@@ -312,6 +338,28 @@ def firmar_evento_paciente(
         "§6.b ACUSE PACIENTE", "Paciente firma el sello de dispensación con ECDSA"
     )
 
+    # Gate cripto: NO firmar acuse sobre un sello manipulado. Si la firma del
+    # farmacéutico no verifica, abortamos antes de que el paciente ponga su
+    # ECDSA sobre datos potencialmente alterados — eso comprometería su
+    # propia firma como aval de algo falso.
+    farm_user = db.query(Usuario).filter(Usuario.id == ev.farmaceutico_id).first()
+    if not (
+        farm_user
+        and farm_user.pub_ec_pem
+        and ev.firma_sello
+        and ev.manifiesto_sello
+        and ecdsa_verify(
+            farm_user.pub_ec_pem, bytes(ev.manifiesto_sello), ev.firma_sello
+        )
+    ):
+        step("§6.b ACUSE", 0, "❌ sello del farmacéutico no verifica → bloquear acuse")
+        raise HTTPException(
+            409,
+            "El sello del farmacéutico no verifica criptográficamente. "
+            "No puedes firmar un acuse sobre datos posiblemente manipulados. "
+            "Contacta al farmacéutico o al soporte.",
+        )
+
     # Firmamos exactamente los mismos bytes de `manifiesto_sello` que firmó
     # la farmacia. Así un verificador externo solo necesita ese blob + dos
     # pubs (farm + paciente) para reconstruir todo el caso de no-repudio.
@@ -347,7 +395,12 @@ def verificar_evento(
     evento_id: int,
     user: Usuario = Depends(auth_required),
     db: Session = Depends(get_db),
+    x_priv_keys: Optional[str] = Header(default=None, alias="X-Priv-Keys"),
 ):
+    banner_flow(
+        "§VERIFICAR EVENTO",
+        f"caller={user.username}/{user.rol} · evento#{evento_id}",
+    )
     ev = db.query(EventoDispensacion).filter(EventoDispensacion.id == evento_id).first()
     if not ev:
         raise HTTPException(404, "Evento de dispensación no encontrado")
@@ -378,10 +431,91 @@ def verificar_evento(
 
     sello_bytes = bytes(ev.manifiesto_sello)
 
-    # Firma del médico: no verificable desde este endpoint sin priv_rsa del
-    # destinatario (requiere descifrar R). Devolvemos null para no mentir;
-    # la verificación real ocurre en /recetas/paciente/{id} y similares.
+    # Firma del médico: requiere descifrar R para tener los bytes firmados.
+    # - Paciente / farmacéutico autorizado: descifra con su priv RSA y
+    #   devolvemos un bool REAL (true/false). Si algo cripto se rompe, es
+    #   `false` (FAIL legítimo) y la traceback queda en stderr — NO ocultamos
+    #   bugs detrás de un "N/A".
+    # - Médico / admin: técnicamente no pueden descifrar (no tienen wrap).
+    #   Devolvemos null + nota explicativa.
     firma_medico_ok = None
+    nota_firma_medico = (
+        "Solo el paciente o un farmacéutico autorizado pueden verificar esta firma "
+        "(requiere descifrar R con su priv RSA)."
+    )
+
+    c_wrap = None
+    if user.rol == "paciente" and receta.paciente_id == user.id:
+        c_wrap = bytes(receta.c_wrap_pac)
+        step("§VERIFICAR", 0, f"paciente#{user.id} autorizado · usar c_wrap_pac")
+    elif user.rol == "farmaceutico":
+        acceso_user = next(
+            (a for a in receta.accesos_farmacias if a.farmacia_id == user.id),
+            None,
+        )
+        if acceso_user:
+            c_wrap = bytes(acceso_user.c_wrap_far)
+            step("§VERIFICAR", 0, f"farmacia#{user.id} autorizada · usar c_wrap_far")
+        else:
+            step("§VERIFICAR", 0, f"farmacia#{user.id} SIN acceso a esta receta")
+    else:
+        step("§VERIFICAR", 0, f"rol={user.rol} no descifra → firma del médico = N/A")
+
+    if c_wrap and medico and medico.pub_ec_pem and receta.firma_doctor:
+        if not x_priv_keys:
+            firma_medico_ok = False
+            nota_firma_medico = (
+                "No se enviaron llaves privadas (X-Priv-Keys); no se pudo descifrar R."
+            )
+            step("§VERIFICAR", 1, "❌ falta cabecera X-Priv-Keys → FAIL")
+        else:
+            try:
+                step("§VERIFICAR", 1, "parsear bundle PEM y exigir pertenencia priv RSA")
+                bundle_pem = bundle.desde_header(x_priv_keys)
+                _, rsa_pem = bundle.exigir_rsa(bundle_pem, user.pub_rsa_pem)
+
+                step("§VERIFICAR", 2, "RSA-OAEP unwrap → DEK")
+                dek = rsa_oaep_decrypt(rsa_pem, c_wrap)
+                try:
+                    step("§VERIFICAR", 3, "AES-128-GCM decrypt + validar TAG")
+                    r_bytes = aes_gcm_decrypt(
+                        dek,
+                        receta.iv_aes,
+                        receta.ciphertext,
+                        receta.tag_aes,
+                        bytes(receta.aad),
+                    )
+                finally:
+                    dek = b"\x00" * 16
+
+                step("§VERIFICAR", 4, "ECDSA verify firma del médico sobre R")
+                firma_medico_ok = ecdsa_verify(
+                    medico.pub_ec_pem, r_bytes, receta.firma_doctor
+                )
+                nota_firma_medico = (
+                    "Verificada con la priv RSA del destinatario: "
+                    "RSA-OAEP unwrap → AES-GCM decrypt → ECDSA verify."
+                )
+            except HTTPException as e:
+                # Bundle malformado / priv no pertenece: FAIL real, no N/A.
+                firma_medico_ok = False
+                nota_firma_medico = f"No se pudo descifrar R: {e.detail}"
+                step("§VERIFICAR", 9, f"❌ HTTPException: {e.detail}")
+            except Exception as e:
+                # Cualquier otro error cripto: traceback completo a stderr +
+                # FAIL en respuesta (sin filtrar detalles al cliente).
+                import traceback
+                step("§VERIFICAR", 9, f"❌ Exception: {type(e).__name__}: {e}")
+                traceback.print_exc()
+                firma_medico_ok = False
+                nota_firma_medico = "No se pudo descifrar R o la firma no verifica."
+
+    step(
+        "§VERIFICAR",
+        5,
+        f"ECDSA verify firma del farmacéutico sobre sello "
+        f"({'sí firmó' if ev.firma_sello else 'no firmó'})",
+    )
 
     firma_farm_ok = False
     if farmaceutico and farmaceutico.pub_ec_pem and ev.firma_sello:
@@ -391,7 +525,24 @@ def verificar_evento(
 
     firma_pac_ok = None
     if ev.firma_paciente and paciente and paciente.pub_ec_pem:
+        step("§VERIFICAR", 6, "ECDSA verify acuse del paciente sobre sello")
         firma_pac_ok = ecdsa_verify(paciente.pub_ec_pem, sello_bytes, ev.firma_paciente)
+    else:
+        step("§VERIFICAR", 6, "acuse del paciente todavía pendiente")
+
+    def _fmt(v):
+        if v is True:  return "✓ VÁLIDA"
+        if v is False: return "✗ INVÁLIDA"
+        return "— N/A"
+
+    step(
+        "§VERIFICAR",
+        7,
+        f"RESUMEN · AAD={'OK' if aad_ok else 'FAIL'} · "
+        f"médico={_fmt(firma_medico_ok)} · "
+        f"farmacéutico={_fmt(firma_farm_ok)} · "
+        f"paciente={_fmt(firma_pac_ok)}",
+    )
 
     return {
         "evento_id": ev.id,
@@ -406,7 +557,7 @@ def verificar_evento(
         "medico": {
             "id": medico.id, "username": medico.username, "nombre": medico.nombre,
             "llave_publica": medico.pub_ec_pem, "firma_valida": firma_medico_ok,
-            "nota_firma": "Verificable solo tras descifrar R con priv_rsa del destinatario.",
+            "nota_firma": nota_firma_medico,
             "firma": receta.firma_doctor,
         }
         if medico

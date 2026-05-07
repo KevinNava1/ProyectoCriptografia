@@ -50,6 +50,13 @@ class RecetaDescifrada(BaseModel):
     # destinatario aportó su priv RSA). En endpoints públicos queda en None.
     firma_medico_ok: Optional[bool] = None
     firma_farmaceutico: Optional[str] = None
+    # cripto_ok: gate global. Si la firma del médico falla cuando el endpoint
+    # pudo verificarla, este flag es False y el contenido sensible
+    # (medicamento, dosis, indicaciones) viene censurado en la respuesta.
+    # La defensa primaria está en backend (no manda los datos reales);
+    # este flag es la señal explícita para que la UI muestre el banner.
+    cripto_ok: bool = True
+    motivo_no_verificada: Optional[str] = None
     dispensaciones_permitidas: int = 1
     dispensaciones_realizadas: int = 0
     parent_id: Optional[int] = None

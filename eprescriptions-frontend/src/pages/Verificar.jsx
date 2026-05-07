@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import {
   KeyRound, ShieldCheck, ShieldAlert, Pill, Stethoscope, Stamp,
   Copy, Check, FileKey2, ChevronRight, Fingerprint, Calendar,
-  Hourglass, ArrowLeft, User,
+  Hourglass, ArrowLeft, User, Download,
 } from 'lucide-react'
 import PageTransition from '../components/ui/PageTransition'
 import SecureCard from '../components/ui/SecureCard'
@@ -335,7 +335,7 @@ function VerificacionPanel({ receta, evento, verif, phase, onBack }) {
 
 function ResumenBanner({ verif }) {
   const allOk = verif.cifrado_aes_gcm
-    && verif.medico?.firma_valida
+    && (verif.medico?.firma_valida == null || verif.medico.firma_valida === true)
     && verif.farmaceutico?.firma_valida
     && (verif.paciente?.firma_valida == null || verif.paciente.firma_valida === true)
 
@@ -366,7 +366,7 @@ function ResumenBanner({ verif }) {
       </div>
       <div className="flex flex-wrap gap-2 mt-3.5 pl-1">
         <Chip label="AES-128-GCM" ok={!!verif.cifrado_aes_gcm} />
-        <Chip label="ECDSA médico" ok={!!verif.medico?.firma_valida} />
+        <Chip label="ECDSA médico" ok={verif.medico?.firma_valida ?? null} />
         <Chip label="ECDSA farmacéutico" ok={!!verif.farmaceutico?.firma_valida} />
         {verif.paciente?.firma_valida != null && (
           <Chip label="Acuse paciente" ok={!!verif.paciente.firma_valida} />
@@ -377,15 +377,22 @@ function ResumenBanner({ verif }) {
 }
 
 function Chip({ label, ok }) {
-  const c = ok
-    ? { b: 'rgba(0,168,112,0.45)', bg: 'rgba(0,168,112,0.10)', fg: '#007A55' }
-    : { b: 'rgba(180,35,24,0.42)', bg: 'rgba(180,35,24,0.08)', fg: '#B42318' }
+  // ok puede ser true/false/null. null = no se pudo verificar en este endpoint
+  // (sin priv RSA, p. ej. cuando el médico abre /verificar). No mentimos
+  // pintándolo verde ni rojo: queda en gris "N/A".
+  const isPending = ok == null
+  const isOk = ok === true
+  const c = isPending
+    ? { b: 'rgba(91,107,123,0.32)', bg: 'rgba(91,107,123,0.08)', fg: 'var(--text-secondary)' }
+    : isOk
+      ? { b: 'rgba(0,168,112,0.45)', bg: 'rgba(0,168,112,0.10)', fg: '#007A55' }
+      : { b: 'rgba(180,35,24,0.42)', bg: 'rgba(180,35,24,0.08)', fg: '#B42318' }
   return (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono font-medium"
       style={{ border: `1px solid ${c.b}`, background: c.bg, color: c.fg }}>
-      {ok ? <ShieldCheck size={11}/> : <ShieldAlert size={11}/>}
+      {isPending ? <Hourglass size={11}/> : isOk ? <ShieldCheck size={11}/> : <ShieldAlert size={11}/>}
       {label}
-      <span>· {ok ? 'OK' : 'FAIL'}</span>
+      <span>· {isPending ? 'N/A' : isOk ? 'OK' : 'FAIL'}</span>
     </span>
   )
 }
@@ -394,13 +401,31 @@ function SignerCard({ role, Icon, data, hint, optional }) {
   const [copied, setCopied] = useState(false)
   if (!data) return null
   const ok = data.firma_valida
-  const isPending = optional && data.firma == null
+  // Pendiente cubre dos casos: (a) firmante opcional que aún no firmó
+  // (acuse del paciente), (b) firma_valida=null porque este endpoint no
+  // pudo verificarla sin la priv RSA del destinatario (p. ej. médico).
+  const isPending = (optional && data.firma == null) || ok == null
   const tone = isPending
     ? 'rgba(91,107,123,0.30)'
     : ok ? 'rgba(0,168,112,0.38)' : 'rgba(180,35,24,0.38)'
+
+  const pem = data.llave_publica || ''
   const copy = async () => {
-    await navigator.clipboard.writeText(data.llave_publica || '')
+    if (!pem) return
+    await navigator.clipboard.writeText(pem)
     setCopied(true); setTimeout(() => setCopied(false), 1400)
+  }
+  const download = () => {
+    if (!pem) return
+    const blob = new Blob([pem], { type: 'application/x-pem-file' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    // role contiene texto largo: derivamos un nombre de archivo seguro.
+    const slug = (data.username || 'firmante').replace(/[^a-zA-Z0-9_.-]/g, '')
+    a.download = `securerx_${slug}_public.pem`
+    a.click()
+    URL.revokeObjectURL(url)
   }
   return (
     <SecureCard>
@@ -429,18 +454,22 @@ function SignerCard({ role, Icon, data, hint, optional }) {
         <p className="text-[11px] text-[color:var(--text-secondary)] mt-3 leading-relaxed">{hint}</p>
       )}
 
-      <div className="mt-4">
-        <div className="flex items-center justify-between mb-1.5">
-          <div className="label-xs">Llave pública (PEM)</div>
-          <button type="button" onClick={copy}
-            className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md hover:bg-[rgba(10,132,255,0.08)] transition-colors text-[color:var(--cyan)]">
-            {copied ? <Check size={12}/> : <Copy size={12}/>} {copied ? 'Copiado' : 'Copiar'}
-          </button>
-        </div>
-        <pre className="text-[10.5px] font-mono p-3 rounded-xl overflow-x-auto whitespace-pre-wrap break-all max-h-40 overflow-y-auto"
-          style={{ background: 'rgba(10,25,48,0.04)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
-          {data.llave_publica}
-        </pre>
+      {/* Llave pública: NO se renderiza el PEM en pantalla. El usuario la
+          descarga (.pem) o la copia al portapapeles si la necesita. */}
+      <div className="mt-4 flex items-center gap-2 flex-wrap">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-mono"
+          style={{ background: 'rgba(10,25,48,0.04)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+          <FileKey2 size={12}/> Llave pública (PEM)
+        </span>
+        <button type="button" onClick={download} disabled={!pem}
+          className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-md transition-colors text-[color:var(--cyan)] hover:bg-[rgba(10,132,255,0.10)] disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ border: '1px solid rgba(10,132,255,0.35)' }}>
+          <Download size={12}/> Descargar .pem
+        </button>
+        <button type="button" onClick={copy} disabled={!pem}
+          className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-md transition-colors text-[color:var(--cyan)] hover:bg-[rgba(10,132,255,0.08)] disabled:opacity-40 disabled:cursor-not-allowed">
+          {copied ? <Check size={12}/> : <Copy size={12}/>} {copied ? 'Copiado' : 'Copiar'}
+        </button>
       </div>
     </SecureCard>
   )

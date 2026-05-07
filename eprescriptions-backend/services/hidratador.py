@@ -33,6 +33,33 @@ def hidratar(
     if last_ev:
         farm = db.query(Usuario).filter(Usuario.id == last_ev.farmaceutico_id).first()
 
+    # Gate cripto: si el endpoint VERIFICÓ la firma y el resultado fue False,
+    # NO devolvemos los campos sensibles del contenido descifrado. Defensa
+    # primaria — quien llame al API directo (curl, fork del front) tampoco
+    # ve nada útil de una receta manipulada. Solo metadatos del AAD pasan.
+    # firma_medico_ok=None significa "endpoint no podía verificar" (p.ej.
+    # médico que no descifra), no "verificación falló" — ese caso pasa.
+    cripto_ok = firma_medico_ok is not False
+    if cripto_ok:
+        medicamento = contenido["medicamento"]
+        dosis = contenido["dosis"]
+        cantidad = int(contenido.get("cantidad", 1))
+        instrucciones = contenido.get(
+            "indicaciones", contenido.get("instrucciones", "")
+        )
+        fecha = contenido.get("fecha_creacion", contenido.get("fecha", ""))
+        motivo_no_verificada = None
+    else:
+        medicamento = "(no verificada)"
+        dosis = "(no verificada)"
+        cantidad = 0
+        instrucciones = ""
+        fecha = contenido.get("fecha_creacion", contenido.get("fecha", ""))
+        motivo_no_verificada = (
+            "La firma ECDSA del médico no verifica contra el contenido "
+            "descifrado. Receta posiblemente manipulada — no la consumas."
+        )
+
     return RecetaDescifrada(
         id=r.id,
         medico_id=r.medico_id,
@@ -41,16 +68,18 @@ def hidratar(
         paciente_username=paciente.username if paciente else None,
         farmaceutico_id=farm.id if farm else None,
         farmaceutico_username=farm.username if farm else None,
-        fecha=contenido.get("fecha_creacion", contenido.get("fecha", "")),
-        medicamento=contenido["medicamento"],
-        dosis=contenido["dosis"],
-        cantidad=int(contenido.get("cantidad", 1)),
-        instrucciones=contenido.get("indicaciones", contenido.get("instrucciones", "")),
+        fecha=fecha,
+        medicamento=medicamento,
+        dosis=dosis,
+        cantidad=cantidad,
+        instrucciones=instrucciones,
         estado=to_legacy(r.estado),
         hash_sha3=r.hash_sha3_hex,
         firma_medico=r.firma_doctor,
         firma_medico_ok=firma_medico_ok,
         firma_farmaceutico=last_ev.firma_sello if last_ev else None,
+        cripto_ok=cripto_ok,
+        motivo_no_verificada=motivo_no_verificada,
         dispensaciones_permitidas=r.dispensaciones_permitidas,
         dispensaciones_realizadas=r.dispensaciones_realizadas,
         parent_id=r.parent_id,

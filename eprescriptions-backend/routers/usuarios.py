@@ -117,12 +117,18 @@ def registrar(datos: UsuarioInput, db: Session = Depends(get_db)):
 
 @router.get("/verificar-email")
 def verificar_email(token: str = Query(...), db: Session = Depends(get_db)):
+    # Idempotente: no nulificamos el token al verificar. Esto soporta:
+    #  (a) React StrictMode en dev, que dispara el effect dos veces y antes
+    #      causaba que la 2ª llamada devolviera 400 con falso "ya usado".
+    #  (b) Pre-fetchers de Gmail/Outlook que abren el link antes que el user.
+    # El token se rota cuando el user pide reenvío (`reenviar_verificacion`),
+    # así que un token viejo deja de servir en cuanto se emite uno nuevo.
     u = db.query(Usuario).filter(Usuario.token_verificacion == token).first()
     if not u:
         raise HTTPException(400, "Token inválido o ya utilizado")
-    u.email_verificado   = True
-    u.token_verificacion = None
-    db.commit()
+    if not u.email_verificado:
+        u.email_verificado = True
+        db.commit()
     return {"ok": True, "username": u.username}
 
 

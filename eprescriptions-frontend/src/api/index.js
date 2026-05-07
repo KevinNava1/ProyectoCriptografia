@@ -120,7 +120,7 @@ export const dispensacionTicketsAPI = {
     ),
   porReceta: (recetaId) => api.get(`/recetas/${recetaId}/eventos-dispensacion`),
   verificar: (eventoId) =>
-    api.get(`/recetas/eventos-dispensacion/${eventoId}/verificar`),
+    api.get(`/recetas/eventos-dispensacion/${eventoId}/verificar`, withKeys),
 };
 
 export const recetasAPI = {
