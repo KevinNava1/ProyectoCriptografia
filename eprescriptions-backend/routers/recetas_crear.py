@@ -14,7 +14,7 @@ Pipeline completo (los `step()` van mostrando cada fase en el log):
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -81,7 +81,11 @@ def crear_receta(
     db.add(placeholder)
     db.flush()
     id_receta = placeholder.id
-    fecha = date.today().isoformat()
+    # ISO-8601 con offset UTC explícito — el frontend lo localiza a la TZ del
+    # navegador (CDMX). Antes guardábamos solo `YYYY-MM-DD` con `date.today()`
+    # que tomaba la fecha del contenedor (UTC) y cerca de medianoche en CDMX
+    # mostraba el día siguiente.
+    fecha = datetime.now(timezone.utc).isoformat()
 
     step("§4 CREAR", 1, "serializar R canónico")
     r_bytes = canonical_receta.build_R(

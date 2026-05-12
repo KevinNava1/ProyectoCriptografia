@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;0,900;1,500;1,600;1,700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -6,6 +6,8 @@
   --font-sans: 'DM Sans', system-ui, sans-serif;
   --font-heading: 'Syne', 'DM Sans', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-script: 'Playfair Display', 'Cambria', Georgia, serif;
+  --font-editorial: 'Playfair Display', 'Syne', serif;
 
   --color-bg-primary: #EEF4FB;
   --color-bg-secondary: #FFFFFF;
@@ -410,7 +412,7 @@ input[type="checkbox"] {
     rgba(10,132,255,0.10) 45%,
     rgba(10,36,67,0.06) 100%);
   background-size: 200% 100%;
-  animation: skeletonShimmer 1.6s ease-in-out infinite;
+  animation: skeletonShimmer 1.5s linear infinite;
   border-radius: 6px;
 }
 @keyframes skeletonShimmer {
@@ -418,9 +420,261 @@ input[type="checkbox"] {
   100% { background-position: -200% 0; }
 }
 
+/* ─────────── Ripple (click feedback en botones) ─────────── */
+.ripple-host { position: relative; overflow: hidden; }
+.ripple-dot {
+  position: absolute;
+  border-radius: 9999px;
+  transform: scale(0);
+  opacity: 0.55;
+  pointer-events: none;
+  animation: rippleExpand 0.62s cubic-bezier(.22,1,.36,1) forwards;
+}
+@keyframes rippleExpand {
+  to { transform: scale(1); opacity: 0; }
+}
+.btn.btn-ghost .ripple-dot { background: rgba(10,132,255,0.18); }
+.btn.btn-danger .ripple-dot { background: rgba(180,35,24,0.20); }
+
+/* ─────────── Shake (errores de validación) ─────────── */
+@keyframes shakeX {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-8px); }
+  30% { transform: translateX(8px); }
+  45% { transform: translateX(-6px); }
+  60% { transform: translateX(6px); }
+  75% { transform: translateX(-3px); }
+  90% { transform: translateX(3px); }
+}
+.shake { animation: shakeX 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+.shake-input { animation: shakeX 0.45s cubic-bezier(.36,.07,.19,.97) both; }
+
+/* ─────────── Tilt 3D wrapper ─────────── */
+.tilt-host {
+  transform-style: preserve-3d;
+  will-change: transform;
+  transition: transform 280ms cubic-bezier(.22,1,.36,1);
+}
+.tilt-host > * {
+  transform: translateZ(0);
+}
+
+/* ─────────── Float empty-state illustration ─────────── */
+@keyframes emptyFloat {
+  0%, 100% { transform: translateY(0); }
+  50%     { transform: translateY(-8px); }
+}
+.empty-float { animation: emptyFloat 3.6s ease-in-out infinite; }
+
+/* ─────────── Tipografía decorativa ─────────── */
+/* font-script: italic elegante (Playfair italic), no manuscrito. */
+.font-script    { font-family: var(--font-script); font-style: italic; font-weight: 600; letter-spacing: -0.005em; }
+.font-editorial { font-family: var(--font-editorial); letter-spacing: -0.02em; }
+
+/* ─────────── Glass premium para plantillas Rx/ticket ─────────── */
+/* Más translúcido y blur más fuerte para que el aurora viva claro detrás. */
+.glass-template {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.62), rgba(244,250,255,0.42)),
+    rgba(255,255,255,0.10);
+  backdrop-filter: blur(28px) saturate(1.35);
+  -webkit-backdrop-filter: blur(28px) saturate(1.35);
+  border: 1px solid rgba(10,132,255,0.22);
+  border-radius: 1.5rem;
+  box-shadow:
+    0 1px 1px rgba(255,255,255,0.6) inset,
+    0 28px 70px rgba(10,36,67,0.16),
+    0 2px 4px rgba(10,132,255,0.08);
+  position: relative;
+  overflow: hidden;
+}
+.glass-template::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: 1.5rem;
+  padding: 1px;
+  background: linear-gradient(135deg,
+    rgba(10,132,255,0.55),
+    rgba(0,184,217,0.30) 35%,
+    transparent 60%,
+    rgba(10,132,255,0.22) 100%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ─────────── Patrón decorativo recetario (caduceo SVG inline) ─────────── */
+.rx-pattern {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(10,132,255,0.10) 1px, transparent 0);
+  background-size: 22px 22px;
+}
+
+/* Marca de agua del recetario — el shield grande pero muy translúcido */
+.rx-watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0.06;
+  z-index: 0;
+}
+
+/* ─────────── Ticket de farmacia ─────────── */
+/* Bordes perforados realistas (semicírculos blancos en los costados) */
+.ticket-perforation {
+  position: relative;
+  background:
+    radial-gradient(circle at 0 50%, transparent 11px, rgba(255,255,255,0.92) 11.5px) left/12px 22px repeat-y,
+    radial-gradient(circle at 100% 50%, transparent 11px, rgba(255,255,255,0.92) 11.5px) right/12px 22px repeat-y,
+    linear-gradient(135deg, rgba(255,255,255,0.78), rgba(244,250,255,0.62));
+  background-color: rgba(255,255,255,0.05);
+  border-radius: 1.25rem;
+  backdrop-filter: blur(24px) saturate(1.25);
+  -webkit-backdrop-filter: blur(24px) saturate(1.25);
+  box-shadow:
+    0 24px 60px rgba(10,36,67,0.14),
+    0 1px 1px rgba(255,255,255,0.7) inset;
+}
+
+/* Línea de corte (dashed) entre la sección principal y el stub */
+.ticket-cut {
+  border-top: 2px dashed rgba(10,36,67,0.22);
+  position: relative;
+}
+.ticket-cut::before,
+.ticket-cut::after {
+  content: '';
+  position: absolute;
+  top: -10px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--bg-primary);
+  box-shadow: 0 0 0 1px rgba(10,36,67,0.10) inset;
+}
+.ticket-cut::before { left: -9px; }
+.ticket-cut::after  { right: -9px; }
+
+/* ─────────── Sello animado (stamp imprintado) ─────────── */
+@keyframes stampImpress {
+  0%   { transform: scale(2.2) rotate(-8deg); opacity: 0; filter: blur(8px); }
+  60%  { transform: scale(0.92) rotate(-8deg); opacity: 1; filter: blur(0); }
+  78%  { transform: scale(1.04) rotate(-8deg); }
+  100% { transform: scale(1) rotate(-8deg); opacity: 1; }
+}
+.stamp-impress { animation: stampImpress 0.7s cubic-bezier(.22,1,.36,1) both; }
+
+/* ─────────── Heartbeat trace ─────────── */
+@keyframes heartTrace {
+  0%   { stroke-dashoffset: 800; }
+  100% { stroke-dashoffset: -800; }
+}
+.heart-trace {
+  stroke-dasharray: 200 800;
+  animation: heartTrace 4.5s linear infinite;
+}
+
+/* ─────────── Shine sweep (brillo barriendo cards) ─────────── */
+@keyframes shineSweep {
+  0%   { transform: translateX(-50%) skewX(-15deg); opacity: 0; }
+  25%  { opacity: 1; }
+  100% { transform: translateX(380%) skewX(-15deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="shineSweep"] { animation: none !important; }
+}
+
+/* ─────────── Floating capsule ─────────── */
+@keyframes capsuleFloat {
+  0%,100% { transform: translateY(0) rotate(-8deg); }
+  50%     { transform: translateY(-12px) rotate(-4deg); }
+}
+.capsule-float { animation: capsuleFloat 5.5s ease-in-out infinite; }
+
+/* ─────────── Audit timeline ─────────── */
+.audit-line {
+  position: absolute;
+  left: 14px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg,
+    rgba(10,132,255,0.45) 0%,
+    rgba(10,132,255,0.18) 50%,
+    rgba(10,132,255,0.05) 100%);
+  border-radius: 2px;
+}
+
+/* ─────────── Reduce-motion overrides extra ─────────── */
+@media (prefers-reduced-motion: reduce) {
+  .ripple-dot, .shake, .shake-input, .empty-float { animation: none !important; }
+}
+
 /* ─────────── Sonner overrides ─────────── */
+[data-sonner-toaster] {
+  --toast-radius: 0.85rem;
+}
 [data-sonner-toast] {
   font-family: 'DM Sans', sans-serif !important;
+  border-radius: var(--toast-radius) !important;
+  position: relative;
+  overflow: hidden;
+}
+[data-sonner-toast] [data-title] { font-weight: 600 !important; }
+[data-sonner-toast] [data-description] { color: var(--text-secondary) !important; }
+
+/* Slide-in suave desde la derecha (sonner por defecto entra con scale).
+   Forzamos transición consistente con el design system. */
+[data-sonner-toast][data-mounted="true"] {
+  animation: toastIn 0.35s cubic-bezier(.22,1,.36,1) both !important;
+}
+[data-sonner-toast][data-removed="true"] {
+  animation: toastOut 0.22s ease-in both !important;
+}
+@keyframes toastIn {
+  0%   { transform: translateX(24px); opacity: 0; }
+  100% { transform: translateX(0);    opacity: 1; }
+}
+@keyframes toastOut {
+  0%   { transform: translateX(0);    opacity: 1; }
+  100% { transform: translateX(40px); opacity: 0; }
+}
+
+/* Barra de progreso interna — drena la duración del toast. */
+[data-sonner-toast]:not([data-type="loading"])::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #0A84FF, #00B8D9, #0052CC);
+  transform-origin: left;
+  animation: toastProgress var(--toast-duration, 4000ms) linear forwards;
+  pointer-events: none;
+}
+[data-sonner-toast][data-type="success"]::after {
+  background: linear-gradient(90deg, #00A870, #00B8D9);
+}
+[data-sonner-toast][data-type="error"]::after {
+  background: linear-gradient(90deg, #B42318, #E08700);
+}
+[data-sonner-toast][data-type="warning"]::after {
+  background: linear-gradient(90deg, #E08700, #B54708);
+}
+@keyframes toastProgress {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+[data-sonner-toast][data-expanded="true"]::after { animation-play-state: paused; }
+[data-sonner-toast]:hover::after { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  [data-sonner-toast]::after { display: none !important; }
+  [data-sonner-toast][data-mounted="true"],
+  [data-sonner-toast][data-removed="true"] { animation: none !important; }
 }
 
 /* ─────────── Aurora blobs (softer, light-theme friendly) ─────────── */

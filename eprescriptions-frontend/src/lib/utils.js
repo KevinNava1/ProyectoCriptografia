@@ -11,12 +11,30 @@ export function truncateHash(h, start = 8, end = 8) {
   return `${h.slice(0, start)}…${h.slice(-end)}`
 }
 
+// CDMX permanente: no aplicamos DST porque México lo eliminó (2022). Forzamos
+// la TZ aquí en lugar de depender del navegador del usuario.
+const TZ_CDMX = 'America/Mexico_City'
+
+// Acepta:
+//   - ISO completo "2026-05-12T13:45:00+00:00" → localiza a CDMX con hora.
+//   - Date-only "2026-05-12" → muestra ese día, sin shift de TZ (legacy).
+//   - Datetime naive del backend "2026-05-12T13:45:00" → lo tratamos como UTC.
 export function formatDate(d) {
   if (!d) return ''
   try {
-    return new Date(d).toLocaleString('es-MX', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
+    const s = String(d).trim()
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      const [y, m, day] = s.split('-').map(Number)
+      return new Date(y, m - 1, day).toLocaleDateString('es-MX', {
+        day: '2-digit', month: 'short', year: 'numeric',
+      })
+    }
+    const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s)
+    const iso = hasTz ? s : `${s}Z`
+    return new Date(iso).toLocaleString('es-MX', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+      timeZone: TZ_CDMX,
     })
   } catch {
     return String(d)

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import {
@@ -13,6 +14,9 @@ import EmptyState from '../components/ui/EmptyState'
 import Modal from '../components/ui/Modal'
 import CryptoHash from '../components/ui/CryptoHash'
 import SessionKeyPicker, { validateKeysBundle } from '../components/ui/SessionKeyPicker'
+import TiltCard from '../components/ui/TiltCard'
+import AnimatedCounter from '../components/ui/AnimatedCounter'
+import { listContainer, listItem } from '../lib/animations'
 import { useAuthStore } from '../store/useAuthStore'
 import { recetasAPI } from '../api'
 import { formatDate } from '../lib/utils'
@@ -26,10 +30,16 @@ const FILTROS = [
 
 export default function MisEmitidas() {
   const user = useAuthStore(s => s.user)
+  const [searchParams] = useSearchParams()
+  // El Dashboard manda ?filter=emitida|dispensada|revocada. El selector
+  // local usa 'todas|emitida|dispensada|revocada' y lo respeta.
+  const validFilters = ['todas', 'emitida', 'dispensada', 'revocada']
+  const qf = searchParams.get('filter')
+  const initialFiltro = validFilters.includes(qf) ? qf : 'todas'
   const [recetas, setRecetas] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [filtro, setFiltro] = useState('todas')
+  const [filtro, setFiltro] = useState(initialFiltro)
   const [version, setVersion] = useState(0)
   const [cancelOf, setCancelOf] = useState(null)
   const [versionOf, setVersionOf] = useState(null)
@@ -129,14 +139,14 @@ export default function MisEmitidas() {
             />
           )}
           {!loading && !error && visibles.length > 0 && (
-            <div className="grid gap-3">
-              {visibles.map((r, i) => (
-                <motion.div
-                  key={r.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.04 }}
-                >
+            <motion.div
+              variants={listContainer}
+              initial="initial"
+              animate="animate"
+              className="grid gap-3"
+            >
+              {visibles.map((r) => (
+                <motion.div key={r.id} variants={listItem}>
                   <RecetaCard
                     receta={r}
                     onCancel={() => setCancelOf(r)}
@@ -144,7 +154,7 @@ export default function MisEmitidas() {
                   />
                 </motion.div>
               ))}
-            </div>
+            </motion.div>
           )}
         </section>
       </div>
@@ -168,14 +178,18 @@ export default function MisEmitidas() {
 
 function Kpi({ label, value, accent }) {
   return (
-    <SecureCard className="relative overflow-hidden min-h-[110px] flex flex-col justify-between">
-      <div
-        className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-50 pointer-events-none"
-        style={{ background: `radial-gradient(circle, ${accent}33, transparent 70%)` }}
-      />
-      <div className="label-xs">{label}</div>
-      <div className="font-heading text-3xl mt-2" style={{ color: accent }}>{value}</div>
-    </SecureCard>
+    <TiltCard max={4}>
+      <SecureCard className="relative overflow-hidden min-h-[110px] flex flex-col justify-between">
+        <div
+          className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-50 pointer-events-none"
+          style={{ background: `radial-gradient(circle, ${accent}33, transparent 70%)` }}
+        />
+        <div className="label-xs">{label}</div>
+        <div className="font-heading text-3xl mt-2" style={{ color: accent }}>
+          <AnimatedCounter value={value} />
+        </div>
+      </SecureCard>
+    </TiltCard>
   )
 }
 

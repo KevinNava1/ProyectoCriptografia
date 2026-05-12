@@ -11,6 +11,7 @@ import SecureCard from '../components/ui/SecureCard'
 import StatusChip from '../components/ui/StatusChip'
 import EmptyState from '../components/ui/EmptyState'
 import LoadingPulse from '../components/ui/LoadingPulse'
+import { listContainer, listItem } from '../lib/animations'
 import { useAuthStore } from '../store/useAuthStore'
 import { recetasAPI, dispensacionTicketsAPI } from '../api'
 import { formatDate } from '../lib/utils'
@@ -159,16 +160,19 @@ function RecetasGrid({ recetas, loading, onPick }) {
   if (loading) return <LoadingPulse rows={3} />
   if (recetas.length === 0) return <EmptyState title="Sin recetas" message="Todavía no tienes recetas emitidas a tu nombre." />
   return (
-    <section className="grid gap-3">
+    <motion.section
+      variants={listContainer}
+      initial="initial"
+      animate="animate"
+      className="grid gap-3"
+    >
       <div className="label-xs">Selecciona una receta</div>
-      {recetas.map((r, i) => (
+      {recetas.map((r) => (
         <motion.button
           key={r.id}
           type="button"
           onClick={() => onPick(r)}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.04 }}
+          variants={listItem}
           whileHover={{ y: -2 }}
           whileTap={{ scale: 0.99 }}
           className="w-full text-left rounded-2xl overflow-hidden group"
@@ -200,7 +204,7 @@ function RecetasGrid({ recetas, loading, onPick }) {
           </div>
         </motion.button>
       ))}
-    </section>
+    </motion.section>
   )
 }
 
@@ -218,14 +222,19 @@ function EventosList({ receta, eventos, loading, onPick, onBack }) {
         <EmptyState title="Aún no hay dispensaciones"
           message="Esta receta no ha sido dispensada todavía. Cuando la farmacia entregue el medicamento, aparecerá aquí." />
       )}
-      {eventos.map((ev, i) => (
+      {eventos.length > 0 && (
+        <motion.div
+          variants={listContainer}
+          initial="initial"
+          animate="animate"
+          className="grid gap-3"
+        >
+      {eventos.map((ev) => (
         <motion.button
           key={ev.id}
           type="button"
           onClick={() => onPick(ev)}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.04 }}
+          variants={listItem}
           whileHover={{ y: -2 }}
           whileTap={{ scale: 0.99 }}
           className="w-full text-left rounded-2xl overflow-hidden group"
@@ -260,6 +269,8 @@ function EventosList({ receta, eventos, loading, onPick, onBack }) {
           </div>
         </motion.button>
       ))}
+        </motion.div>
+      )}
     </section>
   )
 }

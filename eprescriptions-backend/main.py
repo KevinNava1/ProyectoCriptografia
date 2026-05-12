@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import SessionLocal, init_schema
 from routers import (
     admin,
+    auditoria_cripto,
     health,
     recetas_cancelar,
     recetas_consulta,
@@ -82,3 +83,4 @@ app.include_router(recetas_dispensar.router)     # §6
 app.include_router(recetas_consulta.router)      # §5
 app.include_router(recetas_cancelar.router)      # §8
 app.include_router(recetas_nueva_version.router)  # §9 (sustitución por nueva versión)
+app.include_router(auditoria_cripto.router)       # §12 — inspección cripto cruda

@@ -7,6 +7,9 @@ import PageTransition from '../components/ui/PageTransition'
 import SecureCard from '../components/ui/SecureCard'
 import SessionKeyPicker, { validateKeysBundle } from '../components/ui/SessionKeyPicker'
 import CryptoHash from '../components/ui/CryptoHash'
+import ActionFeedback from '../components/ui/ActionFeedback'
+import Spinner from '../components/ui/Spinner'
+import { useShake } from '../hooks/useShake'
 import { useAuthStore } from '../store/useAuthStore'
 import { recetasAPI, usuariosAPI } from '../api'
 
@@ -34,6 +37,8 @@ export default function NuevaReceta() {
   const [pacienteInfo, setPacienteInfo] = useState(null)
   const [result, setResult] = useState(null)
   const [signing, setSigning] = useState(false)
+  const [signed, setSigned] = useState(false)
+  const [shakeCls, shake] = useShake()
 
   const onChange = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -49,7 +54,7 @@ export default function NuevaReceta() {
 
   const submit = async () => {
     const v = validateKeysBundle(form.llave_privada_medico, ['ec'])
-    if (!v.ok) return toast.error(v.reason)
+    if (!v.ok) { shake(); return toast.error(v.reason) }
     setSigning(true)
     try {
       const { data } = await recetasAPI.crear(user.id, {
@@ -63,9 +68,11 @@ export default function NuevaReceta() {
         llave_privada_medico: form.llave_privada_medico,
       })
       setResult(data)
-      setStep(4)
+      setSigned(true)
+      setTimeout(() => { setStep(4); setSigned(false) }, 1000)
       toast.success(`Receta #${data.id} firmada con ECDSA`)
     } catch (err) {
+      shake()
       toast.error(err?.uiMessage || 'No se pudo firmar la receta')
     } finally { setSigning(false) }
   }
@@ -85,7 +92,16 @@ export default function NuevaReceta() {
 
         <ProgressBar step={step} />
 
-        <SecureCard className="p-6 md:p-8" hover={false}>
+        <ActionFeedback
+          open={signed}
+          mode="success"
+          label="FIRMADA"
+          duration={1000}
+          fullscreen
+          onDone={() => {}}
+        />
+
+        <SecureCard className={`p-6 md:p-8 ${shakeCls}`} hover={false}>
           <AnimatePresence mode="wait">
             {step === 1 && (
               <StepWrap key="s1">
@@ -278,7 +294,8 @@ export default function NuevaReceta() {
                   whileTap={!signing ? { scale: 0.97 } : undefined}
                   className="btn btn-primary"
                 >
-                  <ShieldCheck size={14}/> {signing ? 'Firmando…' : 'Firmar y emitir'}
+                  {signing ? <Spinner size={14} /> : <ShieldCheck size={14}/>}
+                  {signing ? 'Firmando…' : 'Firmar y emitir'}
                 </motion.button>
               )}
             </div>

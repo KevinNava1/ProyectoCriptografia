@@ -8,6 +8,11 @@ import SecureCard from '../components/ui/SecureCard'
 import LoadingPulse from '../components/ui/LoadingPulse'
 import EmptyState from '../components/ui/EmptyState'
 import Modal from '../components/ui/Modal'
+import ActionFeedback from '../components/ui/ActionFeedback'
+import Spinner from '../components/ui/Spinner'
+import TiltCard from '../components/ui/TiltCard'
+import AnimatedCounter from '../components/ui/AnimatedCounter'
+import { listContainer, listItem } from '../lib/animations'
 import { adminAPI } from '../api'
 import { formatDate } from '../lib/utils'
 
@@ -38,6 +43,7 @@ export default function AdminSolicitudes() {
   const [version, setVersion] = useState(0)            // fuerza recarga
   const [bulkOpen, setBulkOpen] = useState(false)      // confirmar masivo
   const [bulk, setBulk] = useState(null)               // { total, done, ok, fail, currentName }
+  const [feedback, setFeedback] = useState(null)        // { mode: 'success'|'error', label }
 
   useEffect(() => {
     let cancelled = false
@@ -68,11 +74,13 @@ export default function AdminSolicitudes() {
     const reactivacion = s.estado === 'suspendida'
     try {
       await adminAPI.aprobar(s.id)
+      setFeedback({ mode: 'success', label: reactivacion ? 'REACTIVADO' : 'APROBADO' })
       toast.success(reactivacion
         ? `@${s.username} reactivado · certificados emitidos`
         : `@${s.username} aprobado · certificados emitidos`)
       setVersion(v => v + 1)
     } catch (err) {
+      setFeedback({ mode: 'error', label: 'ERROR' })
       toast.error(err?.uiMessage || 'No se pudo aprobar')
     } finally { setWorking(null) }
   }
@@ -113,10 +121,12 @@ export default function AdminSolicitudes() {
     setWorking(suspendFor.id)
     try {
       await adminAPI.suspender(suspendFor.id, { motivo: motivo.trim() })
+      setFeedback({ mode: 'success', label: 'SUSPENDIDO' })
       toast.success(`@${suspendFor.username} suspendido · cuenta inhabilitada`)
       setSuspendFor(null); setMotivo('')
       setVersion(v => v + 1)
     } catch (err) {
+      setFeedback({ mode: 'error', label: 'ERROR' })
       toast.error(err?.uiMessage || 'No se pudo suspender')
     } finally { setWorking(null) }
   }
@@ -127,10 +137,12 @@ export default function AdminSolicitudes() {
     setWorking(rejectFor.id)
     try {
       await adminAPI.rechazar(rejectFor.id, { motivo: motivo.trim() })
+      setFeedback({ mode: 'error', label: 'RECHAZADO' })
       toast.success(`@${rejectFor.username} rechazado · usuario eliminado, username y email liberados`)
       setRejectFor(null); setMotivo('')
       setVersion(v => v + 1)
     } catch (err) {
+      setFeedback({ mode: 'error', label: 'ERROR' })
       toast.error(err?.uiMessage || 'No se pudo rechazar')
     } finally { setWorking(null) }
   }
@@ -228,13 +240,16 @@ export default function AdminSolicitudes() {
             />
           )}
           {!loading && !error && solicitudes.length > 0 && (
-            <div className="grid gap-3">
-              {solicitudes.map((s, i) => (
+            <motion.div
+              variants={listContainer}
+              initial="initial"
+              animate="animate"
+              className="grid gap-3"
+            >
+              {solicitudes.map((s) => (
                 <motion.div
                   key={s.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.04 }}
+                  variants={listItem}
                 >
                   <SecureCard className="flex items-center justify-between gap-4 flex-wrap md:flex-nowrap">
                     <div className="flex items-start gap-4 min-w-0 flex-1">
@@ -271,7 +286,7 @@ export default function AdminSolicitudes() {
                           onClick={() => aprobar(s)}
                           className="btn btn-primary btn-sm"
                         >
-                          <Check size={14}/> Aprobar
+                          {working === s.id ? <Spinner size={14} /> : <Check size={14}/>} Aprobar
                         </button>
                         <button
                           type="button"
@@ -344,7 +359,7 @@ export default function AdminSolicitudes() {
                   </SecureCard>
                 </motion.div>
               ))}
-            </div>
+            </motion.div>
           )}
         </section>
       </div>
@@ -392,7 +407,8 @@ export default function AdminSolicitudes() {
               className="btn btn-primary btn-sm"
               style={{ background: '#9A6700', borderColor: '#7a5100' }}
             >
-              <Pause size={13}/> Confirmar suspensión
+              {working === suspendFor?.id ? <Spinner size={13} /> : <Pause size={13}/>}
+              {working === suspendFor?.id ? 'Suspendiendo…' : 'Confirmar suspensión'}
             </button>
           </div>
         </div>
@@ -442,11 +458,21 @@ export default function AdminSolicitudes() {
               className="btn btn-primary btn-sm"
               style={{ background: '#B42318', borderColor: '#8a1610' }}
             >
-              <Trash2 size={13}/> Borrar usuario
+              {working === rejectFor?.id ? <Spinner size={13} /> : <Trash2 size={13}/>}
+              {working === rejectFor?.id ? 'Borrando…' : 'Borrar usuario'}
             </button>
           </div>
         </div>
       </Modal>
+
+      <ActionFeedback
+        open={!!feedback}
+        mode={feedback?.mode || 'success'}
+        label={feedback?.label}
+        duration={1100}
+        fullscreen
+        onDone={() => setFeedback(null)}
+      />
 
       {/* Modal — Aprobar todas */}
       <Modal
@@ -639,22 +665,26 @@ function KebabMenu({ items, disabled }) {
 
 function Kpi({ label, value, accent, icon: Icon }) {
   return (
-    <SecureCard className="relative overflow-hidden min-h-[110px] flex flex-col justify-between">
-      <div
-        className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-50 pointer-events-none"
-        style={{ background: `radial-gradient(circle, ${accent}33, transparent 70%)` }}
-      />
-      <div className="flex items-start justify-between relative gap-3">
-        <div className="label-xs">{label}</div>
+    <TiltCard max={4}>
+      <SecureCard className="relative overflow-hidden min-h-[110px] flex flex-col justify-between">
         <div
-          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-          style={{ background: `${accent}18`, border: `1px solid ${accent}55` }}
-        >
-          <Icon size={16} style={{ color: accent }} />
+          className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-50 pointer-events-none"
+          style={{ background: `radial-gradient(circle, ${accent}33, transparent 70%)` }}
+        />
+        <div className="flex items-start justify-between relative gap-3">
+          <div className="label-xs">{label}</div>
+          <div
+            className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+            style={{ background: `${accent}18`, border: `1px solid ${accent}55` }}
+          >
+            <Icon size={16} style={{ color: accent }} />
+          </div>
         </div>
-      </div>
-      <div className="font-heading text-3xl mt-2" style={{ color: accent }}>{value}</div>
-    </SecureCard>
+        <div className="font-heading text-3xl mt-2" style={{ color: accent }}>
+          <AnimatedCounter value={value} />
+        </div>
+      </SecureCard>
+    </TiltCard>
   )
 }
 

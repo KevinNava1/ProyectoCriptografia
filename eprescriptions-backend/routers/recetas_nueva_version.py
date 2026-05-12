@@ -12,7 +12,7 @@ sustituta nunca llegó a crearse" que dejaría al paciente sin tratamiento.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -96,7 +96,7 @@ def nueva_version(
     db.flush()
 
     step("§9 NUEVA VERSIÓN", 2, "serializar R canónico de la receta sustituta")
-    fecha = date.today().isoformat()
+    fecha = datetime.now(timezone.utc).isoformat()
     r_bytes = canonical_receta.build_R(
         id_receta=placeholder.id, id_doctor=user.id, id_paciente=paciente.id,
         medicamento=datos.medicamento, dosis=datos.dosis, cantidad=datos.cantidad,

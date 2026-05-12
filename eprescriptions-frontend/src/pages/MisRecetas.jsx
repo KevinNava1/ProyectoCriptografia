@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Filter, Pill } from 'lucide-react'
 import PageTransition from '../components/ui/PageTransition'
-import RxCard3D from '../components/ui/RxCard3D'
+import RxTemplate from '../components/ui/RxTemplate'
 import LoadingPulse from '../components/ui/LoadingPulse'
 import EmptyState from '../components/ui/EmptyState'
+import { listContainer, listItem } from '../lib/animations'
 import { useAuthStore } from '../store/useAuthStore'
 import { recetasAPI } from '../api'
 
@@ -14,18 +16,20 @@ const FILTERS = [
   { id: 'dispensada', label: 'Dispensadas'},
 ]
 
-const container = { animate: { transition: { staggerChildren: 0.07 } } }
-const item = {
-  initial: { opacity: 0, y: 16 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.35 } },
-}
-
 export default function MisRecetas() {
   const user = useAuthStore(s => s.user)
+  const [searchParams] = useSearchParams()
+  const initialFilter = ['all', 'emitida', 'dispensada'].includes(searchParams.get('filter'))
+    ? searchParams.get('filter')
+    : 'all'
   const [recetas, setRecetas] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [filter, setFilter] = useState('all')
+  const [filter, setFilter] = useState(initialFilter)
+  // Cuando el paciente voltea una receta a ver su firma, queremos que las
+  // demás se difuminen para enfocar la vista. flippedId es el id que está
+  // mostrando el reverso; null = nada flipped.
+  const [flippedId, setFlippedId] = useState(null)
 
   useEffect(() => {
     if (!user) return
@@ -101,14 +105,19 @@ export default function MisRecetas() {
 
         {!loading && !error && filtered.length > 0 && (
           <motion.div
-            variants={container}
+            variants={listContainer}
             initial="initial"
             animate="animate"
-            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"
+            className="grid grid-cols-1 xl:grid-cols-2 gap-6"
           >
             {filtered.map(r => (
-              <motion.div key={r.id} variants={item}>
-                <RxCard3D receta={r} />
+              <motion.div key={r.id} variants={listItem}>
+                <RxTemplate
+                  receta={r}
+                  flipped={flippedId === r.id}
+                  dimmed={flippedId !== null && flippedId !== r.id}
+                  onFlipChange={(f) => setFlippedId(f ? r.id : null)}
+                />
               </motion.div>
             ))}
           </motion.div>

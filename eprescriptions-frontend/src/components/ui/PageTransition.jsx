@@ -1,18 +1,16 @@
 import { motion } from 'framer-motion'
+import { pageTransition } from '../../lib/animations'
 
-const variants = {
-  initial: { opacity: 0, y: 20, filter: 'blur(8px)' },
-  animate: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.45, ease: 'easeOut' } },
-  exit:    { opacity: 0, y: -10, filter: 'blur(4px)', transition: { duration: 0.25 } },
-}
-
+// Crossfade + slide suave (300ms). Centralizado en animations.js para que
+// todas las rutas respiren igual. Si una página necesita otro timing, que
+// monte motion.div con sus propios variants — no parchar aquí.
 export default function PageTransition({ children, className }) {
   return (
     <motion.div
-      variants={variants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
+      initial={pageTransition.initial}
+      animate={pageTransition.animate}
+      exit={pageTransition.exit}
+      transition={pageTransition.transition}
       className={className}
     >
       {children}

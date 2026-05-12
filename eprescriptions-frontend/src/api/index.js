@@ -144,4 +144,11 @@ export const recetasAPI = {
     api.get(`/recetas/paciente/${pacienteId}/pendientes`, withKeys), //Para el buscador de recetas por usuario
 };
 
+export const auditoriaCriptoAPI = {
+  inventario: () => api.get("/auditoria-cripto/inventario"),
+  detalle: (recetaId) => api.get(`/auditoria-cripto/receta/${recetaId}`),
+  log: (limit = 100) =>
+    api.get(`/auditoria-cripto/audit-log`, { params: { limit } }),
+};
+
 export default api;

@@ -24,6 +24,9 @@ import Modal from "../components/ui/Modal";
 import SessionKeyPicker, {
   validateKeysBundle,
 } from "../components/ui/SessionKeyPicker";
+import Spinner from "../components/ui/Spinner";
+import DispensationTicket from "../components/ui/DispensationTicket";
+import { listContainer, listItem } from "../lib/animations";
 import { useAuthStore } from "../store/useAuthStore";
 import { dispensacionTicketsAPI, recetasAPI } from "../api";
 import { formatDate } from "../lib/utils";
@@ -297,9 +300,14 @@ function RecetasGrid({
     );
   }
   return (
-    <section className="grid gap-3">
+    <motion.section
+      variants={listContainer}
+      initial="initial"
+      animate="animate"
+      className="grid gap-3"
+    >
       <div className="label-xs">Selecciona una receta</div>
-      {recetas.map((r, i) => {
+      {recetas.map((r) => {
         const pendCount = role === "paciente" ? pendingByReceta[r.id] || 0 : 0;
         const realizadas = r.dispensaciones_realizadas ?? 0;
         const permitidas = r.dispensaciones_permitidas ?? 0;
@@ -308,9 +316,7 @@ function RecetasGrid({
             key={r.id}
             type="button"
             onClick={() => onPick(r)}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.04 }}
+            variants={listItem}
             whileHover={{ y: -2 }}
             whileTap={{ scale: 0.99 }}
             className="w-full text-left rounded-2xl overflow-hidden group"
@@ -390,7 +396,7 @@ function RecetasGrid({
           </motion.button>
         );
       })}
-    </section>
+    </motion.section>
   );
 }
 
@@ -427,24 +433,27 @@ function DispensacionesList({
         />
       )}
 
-      {!loading &&
-        !error &&
-        eventos.map((ev, i) => (
-          <motion.div
-            key={ev.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.04 }}
-          >
-            <EventoCard
-              ev={ev}
-              role={role}
-              user={user}
-              onSign={onSign}
-              onDetail={onDetail}
-            />
-          </motion.div>
-        ))}
+      {!loading && !error && eventos.length > 0 && (
+        <motion.div
+          variants={listContainer}
+          initial="initial"
+          animate="animate"
+          className="space-y-3"
+        >
+          {eventos.map((ev) => (
+            <motion.div key={ev.id} variants={listItem}>
+              <DispensationTicket
+                ev={ev}
+                receta={receta}
+                role={role}
+                user={user}
+                onSign={onSign}
+                onDetail={onDetail}
+              />
+            </motion.div>
+          ))}
+        </motion.div>
+      )}
     </section>
   );
 }

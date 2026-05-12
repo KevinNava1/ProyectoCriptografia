@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import JSZip from 'jszip'
 import { AlertTriangle, ArrowRight, UserPlus, Download, AtSign, KeyRound, Globe, Package, Check, Mail } from 'lucide-react'
+import { useShake } from '../hooks/useShake'
+import Spinner from '../components/ui/Spinner'
 const AuroraBackground = lazy(() => import('../components/3d/AuroraBackground'))
 const VideoBackdrop    = lazy(() => import('../components/3d/VideoBackdrop'))
 const MedicalVortex3D  = lazy(() => import('../components/3d/MedicalVortex3D'))
@@ -32,6 +34,7 @@ export default function Registro() {
   const [confirmed, setConfirmed] = useState(false)
   const [zipping, setZipping] = useState(false)
   const [downloaded, setDownloaded] = useState({}) // {ec_priv: true, ...}
+  const [shakeCls, shake] = useShake()
 
   // Llaves separadas: si el backend aún no envía los campos partidos,
   // las extraemos del bundle PEM como fallback.
@@ -48,16 +51,18 @@ export default function Registro() {
 
   const onChange = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
+  const fail = (msg) => { shake(); toast.error(msg) }
+
   const submit = async (e) => {
     e.preventDefault()
     if (!form.username || !form.nombre || !form.email || !form.password || !form.confirm) {
-      return toast.error('Completa todos los campos')
+      return fail('Completa todos los campos')
     }
     if (!USERNAME_RE.test(form.username)) {
-      return toast.error('El usuario debe tener 3-40 caracteres (letras, números, . _ -)')
+      return fail('El usuario debe tener 3-40 caracteres (letras, números, . _ -)')
     }
-    if (form.password.length < 6) return toast.error('La contraseña debe tener al menos 6 caracteres')
-    if (form.password !== form.confirm) return toast.error('Las contraseñas no coinciden')
+    if (form.password.length < 6) return fail('La contraseña debe tener al menos 6 caracteres')
+    if (form.password !== form.confirm) return fail('Las contraseñas no coinciden')
     setBusy(true)
     try {
       const { data } = await usuariosAPI.registrar({
@@ -67,7 +72,7 @@ export default function Registro() {
       setResp(data)
       setStep(2)
     } catch (err) {
-      toast.error(err?.uiMessage || 'No se pudo registrar')
+      fail(err?.uiMessage || 'No se pudo registrar')
     } finally { setBusy(false) }
   }
 
@@ -154,7 +159,7 @@ correspondientes. Las públicas ya están registradas en el servidor.
           animate={{ opacity: 1, y: 0 }}
           className={`relative z-10 w-full ${step === 2 ? 'max-w-4xl' : 'max-w-xl'}`}
         >
-          <div className="secure-card p-6 sm:p-8">
+          <div className={`secure-card p-6 sm:p-8 ${shakeCls}`}>
             <StepHeader step={step} />
 
             <AnimatePresence mode="wait">
@@ -248,11 +253,13 @@ correspondientes. Las públicas ya están registradas en el servidor.
                   <motion.button
                     type="submit"
                     disabled={busy}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={!busy ? { scale: 1.02 } : undefined}
+                    whileTap={!busy ? { scale: 0.98 } : undefined}
                     className="btn btn-primary btn-lg w-full"
                   >
-                    <UserPlus size={16}/> {busy ? 'Creando…' : 'Crear cuenta'} <ArrowRight size={16}/>
+                    {busy ? <Spinner size={16} /> : <UserPlus size={16}/>}
+                    {busy ? 'Creando…' : 'Crear cuenta'}
+                    {!busy && <ArrowRight size={16}/>}
                   </motion.button>
 
                   <div className="text-center text-xs text-[color:var(--text-secondary)] pt-1">

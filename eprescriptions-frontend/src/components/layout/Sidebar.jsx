@@ -13,6 +13,8 @@ import {
   PanelLeftOpen,
   X,
   Stamp,
+  BarChart3,
+  ScanSearch,
 } from "lucide-react";
 import { useAuthStore } from "../../store/useAuthStore";
 
@@ -25,6 +27,14 @@ function linksForRole(role) {
       hint: "Resumen",
     },
   ];
+  if (role !== "admin") {
+    base.push({
+      to: "/estadisticas",
+      label: "Estadísticas",
+      icon: BarChart3,
+      hint: "Gráficos y mapa de calor",
+    });
+  }
   if (role === "paciente") {
     base.push({
       to: "/mis-recetas",
@@ -86,6 +96,14 @@ function linksForRole(role) {
       icon: ShieldCheck,
       hint: "Aprobar / rechazar",
     });
+  if (role) {
+    base.push({
+      to: "/auditoria-cripto",
+      label: "Auditoría cripto",
+      icon: ScanSearch,
+      hint: "Bytes crudos en BD",
+    });
+  }
   return base;
 }
 

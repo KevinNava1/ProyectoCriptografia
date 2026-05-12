@@ -22,6 +22,10 @@ import SessionKeyPicker, {
   validateKeysBundle,
 } from "../components/ui/SessionKeyPicker";
 import VerificationSteps from "../components/ui/VerificationSteps";
+import Spinner from "../components/ui/Spinner";
+import ActionFeedback from "../components/ui/ActionFeedback";
+import { DispensationTicketPreview } from "../components/ui/DispensationTicket";
+import { listContainer, listItem } from "../lib/animations";
 import { useAuthStore } from "../store/useAuthStore";
 import { recetasAPI, usuariosAPI } from "../api";
 import { formatDate } from "../lib/utils";
@@ -267,24 +271,13 @@ export default function Pendientes() {
               </div>
               <motion.button
                 type="submit"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
+                whileHover={!searching ? { scale: 1.03 } : undefined}
+                whileTap={!searching ? { scale: 0.97 } : undefined}
                 disabled={searching}
                 className="btn btn-primary shrink-0"
               >
-                {searching ? (
-                  <span className="flex items-center gap-2">
-                    <span
-                      className="dot-pulse cyan"
-                      style={{ width: 7, height: 7 }}
-                    />{" "}
-                    Buscando…
-                  </span>
-                ) : (
-                  <>
-                    <Search size={14} /> Buscar
-                  </>
-                )}
+                {searching ? <Spinner size={14} /> : <Search size={14} />}
+                {searching ? "Buscando…" : "Buscar"}
               </motion.button>
             </form>
           ) : (
@@ -397,17 +390,16 @@ export default function Pendientes() {
           {recetas.length > 0 && (
             <motion.div
               key="results"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              variants={listContainer}
+              initial="initial"
+              animate="animate"
               exit={{ opacity: 0 }}
               className="grid gap-4"
             >
-              {recetas.map((r, i) => (
+              {recetas.map((r) => (
                 <motion.div
                   key={r.id}
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 }}
+                  variants={listItem}
                 >
                   <SecureCard className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
                     <div className="flex items-start gap-4 min-w-0 flex-1">
@@ -473,77 +465,27 @@ export default function Pendientes() {
       >
         {picked && (
           <div className="space-y-5">
-            {/* Medicamento principal */}
-            <div
-              className="p-4 rounded-xl"
-              style={{
-                background: "rgba(10,132,255,0.06)",
-                border: "1px solid rgba(10,132,255,0.22)",
-              }}
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
-                  style={{
-                    background: "rgba(10,132,255,0.12)",
-                    border: "1px solid rgba(10,132,255,0.32)",
-                  }}
-                >
-                  <Pill className="text-[color:var(--cyan)]" size={18} />
-                </div>
-                <div>
-                  <div className="font-heading text-lg leading-tight">
-                    {picked.medicamento}
-                  </div>
-                  <div className="text-sm text-[color:var(--text-secondary)]">
-                    {picked.dosis} · x{picked.cantidad}
-                  </div>
-                </div>
-                <div className="ml-auto">
-                  <StatusChip estado={picked.estado} />
-                </div>
-              </div>
-              {picked.instrucciones && (
-                <div className="mt-2 pt-3 border-t border-[var(--border-subtle)]">
-                  <div className="label-xs mb-1">Instrucciones</div>
-                  <p className="text-sm leading-relaxed">
-                    {picked.instrucciones}
-                  </p>
-                </div>
-              )}
-            </div>
+            {/* Ticket preview — vista premium del medicamento + actores */}
+            <DispensationTicketPreview
+              receta={picked}
+              medicoUsername={picked.medico_username}
+              farmaceuticoUsername={user?.username}
+            />
 
-            {/* Paciente y médico */}
-            <div className="grid grid-cols-2 gap-3">
+            {picked.instrucciones && (
               <div
-                className="p-3 rounded-xl"
+                className="p-3.5 rounded-xl"
                 style={{
-                  background: "rgba(255,255,255,0.03)",
-                  border: "1px solid var(--border-subtle)",
+                  background: "rgba(10,132,255,0.05)",
+                  border: "1px solid rgba(10,132,255,0.20)",
                 }}
               >
-                <div className="label-xs mb-1 flex items-center gap-1">
-                  <User size={10} /> Paciente
-                </div>
-                <div className="font-medium truncate">
-                  @{picked.paciente_username || picked.paciente_id}
-                </div>
+                <div className="label-xs mb-1">Instrucciones del médico</div>
+                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+                  {picked.instrucciones}
+                </p>
               </div>
-              <div
-                className="p-3 rounded-xl"
-                style={{
-                  background: "rgba(255,255,255,0.03)",
-                  border: "1px solid var(--border-subtle)",
-                }}
-              >
-                <div className="label-xs mb-1 flex items-center gap-1">
-                  <Stethoscope size={10} /> Médico
-                </div>
-                <div className="font-medium truncate">
-                  dr.@{picked.medico_username || picked.medico_id}
-                </div>
-              </div>
-            </div>
+            )}
 
             {/* Fecha + Dispensaciones */}
             <div className="grid grid-cols-2 gap-3">

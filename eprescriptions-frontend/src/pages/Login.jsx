@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { LogIn, AtSign, Lock, Wifi, WifiOff, ShieldCheck } from 'lucide-react'
+import { useShake } from '../hooks/useShake'
+import Spinner from '../components/ui/Spinner'
 // 3D / video → lazy: pesan ~600KB de three.js + assets de video. Se cargan
 // asíncronos para no bloquear el render inicial de la card de login. Si el
 // usuario tiene la conexión justa, los efectos llegan tarde pero el form
@@ -44,6 +46,7 @@ export default function Login() {
   })
   const [busy, setBusy] = useState(false)
   const [online, setOnline] = useState(null)
+  const [shakeCls, shake] = useShake()
 
   useEffect(() => {
     let cancelled = false
@@ -54,15 +57,17 @@ export default function Login() {
   const onChange = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const needsKeys = form.rol !== 'admin'
 
+  const fail = (msg) => { shake(); toast.error(msg) }
+
   const submit = async (e) => {
     e.preventDefault()
-    if (!form.username || !form.password) return toast.error('Ingresa usuario y contraseña')
+    if (!form.username || !form.password) return fail('Ingresa usuario y contraseña')
     if (needsKeys) {
       if (!form.priv_ec || !form.priv_rsa) {
-        return toast.error('Sube tus DOS llaves: la ECDSA y la RSA')
+        return fail('Sube tus DOS llaves: la ECDSA y la RSA')
       }
-      if (!isEcPrivatePem(form.priv_ec))   return toast.error('La llave EC no tiene formato válido')
-      if (!isRsaPrivatePem(form.priv_rsa)) return toast.error('La llave RSA no tiene formato válido')
+      if (!isEcPrivatePem(form.priv_ec))   return fail('La llave EC no tiene formato válido')
+      if (!isRsaPrivatePem(form.priv_rsa)) return fail('La llave RSA no tiene formato válido')
     }
     setBusy(true)
     try {
@@ -98,6 +103,7 @@ export default function Login() {
         usuariosAPI.reenviarVerificacion(null, form.username.trim()).catch(() => {})
         toast.warning('Revisa tu correo — te reenviamos el enlace de verificación')
       } else {
+        shake()
         toast.error(err?.uiMessage || 'No se pudo iniciar sesión')
       }
     } finally { setBusy(false) }
@@ -134,7 +140,7 @@ export default function Login() {
           animate={{ opacity: 1, y: 0 }}
           className="relative z-10 w-full max-w-md"
         >
-          <div className="secure-card p-6 sm:p-8">
+          <div className={`secure-card p-6 sm:p-8 ${shakeCls}`}>
             <div className="flex items-center gap-3 mb-7">
               <ShieldLogo size={48} />
               <div className="flex-1 min-w-0">
@@ -238,11 +244,11 @@ export default function Login() {
               <motion.button
                 type="submit"
                 disabled={busy || online === false}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={!busy ? { scale: 1.02 } : undefined}
+                whileTap={!busy ? { scale: 0.98 } : undefined}
                 className="btn btn-primary btn-lg w-full"
               >
-                <LogIn size={16} />
+                {busy ? <Spinner size={16} /> : <LogIn size={16} />}
                 {busy ? 'Iniciando…' : 'Iniciar sesión'}
               </motion.button>
             </form>

@@ -7,6 +7,8 @@ const AuroraBackground = lazy(() => import('../components/3d/AuroraBackground'))
 const VideoBackdrop    = lazy(() => import('../components/3d/VideoBackdrop'))
 import ShieldLogo from '../components/3d/ShieldLogo'
 import PageTransition from '../components/ui/PageTransition'
+import Spinner from '../components/ui/Spinner'
+import { useShake } from '../hooks/useShake'
 import { usuariosAPI } from '../api'
 
 export default function RecuperarPassword() {
@@ -20,15 +22,17 @@ function SolicitarForm() {
   const [email, setEmail] = useState('')
   const [busy,  setBusy]  = useState(false)
   const [sent,  setSent]  = useState(false)
+  const [shakeCls, shake] = useShake()
 
   const submit = async (e) => {
     e.preventDefault()
-    if (!email) return toast.error('Ingresa tu email')
+    if (!email) { shake(); return toast.error('Ingresa tu email') }
     setBusy(true)
     try {
       await usuariosAPI.recuperarPassword(email)
       setSent(true)
     } catch {
+      shake()
       toast.error('No se pudo enviar el correo')
     } finally { setBusy(false) }
   }
@@ -46,7 +50,7 @@ function SolicitarForm() {
           animate={{ opacity: 1, y: 0 }}
           className="relative z-10 w-full max-w-md"
         >
-          <div className="secure-card p-6 sm:p-8">
+          <div className={`secure-card p-6 sm:p-8 ${shakeCls}`}>
             <div className="flex items-center gap-3 mb-7">
               <ShieldLogo size={48} />
               <div>
@@ -90,11 +94,13 @@ function SolicitarForm() {
                 <motion.button
                   type="submit"
                   disabled={busy}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={!busy ? { scale: 1.02 } : undefined}
+                  whileTap={!busy ? { scale: 0.98 } : undefined}
                   className="btn btn-primary btn-lg w-full"
                 >
-                  {busy ? 'Enviando…' : 'Enviar enlace'} <ArrowRight size={16} />
+                  {busy ? <Spinner size={16} /> : null}
+                  {busy ? 'Enviando…' : 'Enviar enlace'}
+                  {!busy && <ArrowRight size={16} />}
                 </motion.button>
                 <div className="text-center text-xs text-[color:var(--text-secondary)]">
                   <Link to="/login" className="hover:underline">Volver al login</Link>
@@ -113,17 +119,19 @@ function ResetForm({ token }) {
   const [pw,      setPw]      = useState('')
   const [confirm, setConfirm] = useState('')
   const [busy,    setBusy]    = useState(false)
+  const [shakeCls, shake] = useShake()
 
   const submit = async (e) => {
     e.preventDefault()
-    if (pw.length < 6) return toast.error('La contraseña debe tener al menos 6 caracteres')
-    if (pw !== confirm) return toast.error('Las contraseñas no coinciden')
+    if (pw.length < 6) { shake(); return toast.error('La contraseña debe tener al menos 6 caracteres') }
+    if (pw !== confirm) { shake(); return toast.error('Las contraseñas no coinciden') }
     setBusy(true)
     try {
       await usuariosAPI.resetPassword(token, pw)
       toast.success('Contraseña actualizada. Inicia sesión.')
       setTimeout(() => nav('/login', { replace: true }), 1200)
     } catch (err) {
+      shake()
       toast.error(err?.uiMessage || 'El enlace es inválido o ha expirado')
     } finally { setBusy(false) }
   }
@@ -141,7 +149,7 @@ function ResetForm({ token }) {
           animate={{ opacity: 1, y: 0 }}
           className="relative z-10 w-full max-w-md"
         >
-          <div className="secure-card p-6 sm:p-8">
+          <div className={`secure-card p-6 sm:p-8 ${shakeCls}`}>
             <div className="flex items-center gap-3 mb-7">
               <ShieldLogo size={48} />
               <div>
@@ -192,11 +200,13 @@ function ResetForm({ token }) {
               <motion.button
                 type="submit"
                 disabled={busy}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={!busy ? { scale: 1.02 } : undefined}
+                whileTap={!busy ? { scale: 0.98 } : undefined}
                 className="btn btn-primary btn-lg w-full"
               >
-                {busy ? 'Guardando…' : 'Guardar contraseña'} <ArrowRight size={16} />
+                {busy ? <Spinner size={16} /> : null}
+                {busy ? 'Guardando…' : 'Guardar contraseña'}
+                {!busy && <ArrowRight size={16} />}
               </motion.button>
             </form>
           </div>
