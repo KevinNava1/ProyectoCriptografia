@@ -10,9 +10,14 @@ const AuroraBackground = lazy(() => import('../3d/AuroraBackground'))
 const VideoBackdrop    = lazy(() => import('../3d/VideoBackdrop'))
 const MedicalVortex3D  = lazy(() => import('../3d/MedicalVortex3D'))
 
+// Rutas que aprovechan todo el ancho del área de contenido en lugar de
+// quedar centradas dentro del tope de 1320px (p. ej. la rejilla de recetas).
+const FULL_WIDTH_ROUTES = ['/mis-recetas']
+
 export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
+  const fullWidth = FULL_WIDTH_ROUTES.includes(location.pathname)
 
   // Parallax multicapa: el aurora se mueve un poco más que el video (que es
   // el fondo "lejano") y el vórtice 3D un poquito más todavía. Sensación de
@@ -67,7 +72,7 @@ export default function AppLayout() {
       <div className="flex-1 flex flex-col relative z-10 min-w-0">
         <Header onOpenMenu={() => setMobileOpen(true)} />
         <main className="flex-1 px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8">
-          <div className="page-container">
+          <div className={fullWidth ? 'page-container page-container--full' : 'page-container'}>
             <Outlet />
           </div>
         </main>

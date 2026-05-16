@@ -383,6 +383,12 @@ input[type="checkbox"] {
   margin-inline: auto;
 }
 
+/* Variante a todo el ancho: la página ocupa el área de contenido completa
+   en vez de quedar centrada con el tope de 1320px. */
+.page-container--full {
+  max-width: none;
+}
+
 /* ─────────── Modal card (sólido, sin transparencia) ─────────── */
 .modal-card {
   position: relative;

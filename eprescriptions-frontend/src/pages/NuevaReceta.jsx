@@ -227,11 +227,18 @@ export default function NuevaReceta() {
                 >
                   <Check size={32} className="text-white" />
                 </motion.div>
-                <h2 className="font-heading text-2xl text-center mt-4 glitch text-[color:var(--emerald)]">Receta firmada</h2>
-                <p className="text-center text-sm text-[color:var(--text-secondary)] mt-2 max-w-md mx-auto">
-                  Cifrada con AES-128-GCM y firmada con ECDSA P-256 + SHA3-256 (hash integrado en la firma).
-                </p>
-
+                <div className="flex justify-center mt-4">
+                  <h2
+                    className="font-heading text-lg sm:text-xl inline-flex items-center gap-2 px-5 py-2 rounded-xl"
+                    style={{
+                      background: 'linear-gradient(135deg,#00A870,#007049)',
+                      color: '#FFFFFF',
+                      boxShadow: '0 6px 20px rgba(0,168,112,0.35)',
+                    }}
+                  >
+                    <ShieldCheck size={18} className="shrink-0" /> Receta firmada
+                  </h2>
+                </div>
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                   <SecureCard hover={false}>
                     <div className="label-xs">Receta</div>

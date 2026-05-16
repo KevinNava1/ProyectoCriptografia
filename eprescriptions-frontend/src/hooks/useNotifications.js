@@ -15,6 +15,11 @@ import { recetasAPI } from '../api'
 
 const READ_KEY = 'securerx:notif-read'
 
+// Tope total de notificaciones. El panel del bell hace scroll (max-h 60vh),
+// así que listar varias no es problema; el tope solo evita que un usuario con
+// cientos de recetas genere cientos de items.
+const MAX_NOTIFS = 30
+
 function loadRead() {
   try {
     const raw = sessionStorage.getItem(READ_KEY)
@@ -53,7 +58,7 @@ function buildFromRecetas(user, recetas) {
   })
 
   if (user.rol === 'paciente') {
-    const recientes = sorted.filter(r => r.estado === 'emitida').slice(0, 3)
+    const recientes = sorted.filter(r => r.estado === 'emitida').slice(0, 15)
     for (const r of recientes) {
       out.push({
         id: `rx-emit-${r.id}`,
@@ -64,7 +69,7 @@ function buildFromRecetas(user, recetas) {
         color: '#0A84FF',
       })
     }
-    const dispensadas = sorted.filter(r => r.estado === 'dispensada').slice(0, 2)
+    const dispensadas = sorted.filter(r => r.estado === 'dispensada').slice(0, 10)
     for (const r of dispensadas) {
       out.push({
         id: `rx-disp-${r.id}`,
@@ -78,7 +83,7 @@ function buildFromRecetas(user, recetas) {
   }
 
   if (user.rol === 'medico') {
-    const recientes = sorted.slice(0, 3)
+    const recientes = sorted.slice(0, 25)
     for (const r of recientes) {
       const emoji = r.estado === 'dispensada' ? '🧪' : r.estado === 'revocada' ? '⛔' : '✍️'
       const title = r.estado === 'dispensada'
@@ -98,7 +103,7 @@ function buildFromRecetas(user, recetas) {
   }
 
   if (user.rol === 'farmaceutico') {
-    const mias = sorted.filter(r => r.farmaceutico_id === user.id && r.estado === 'dispensada').slice(0, 3)
+    const mias = sorted.filter(r => r.farmaceutico_id === user.id && r.estado === 'dispensada').slice(0, 25)
     for (const r of mias) {
       out.push({
         id: `rx-mia-${r.id}`,
@@ -176,7 +181,7 @@ export function useNotifications(pollMs = 60000) {
       seen.add(n.id)
       out.push({ ...n, hint: relativeTime(n.ts) })
     }
-    return out.slice(0, 10)
+    return out.slice(0, MAX_NOTIFS)
   }, [user, recetas, pushed, readIds])
 
   const dismiss = (id) => {

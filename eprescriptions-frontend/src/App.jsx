@@ -15,7 +15,6 @@ import MisEmitidas from './pages/MisEmitidas'
 import Pendientes from './pages/Pendientes'
 import TicketsDispensacion from './pages/TicketsDispensacion'
 import AdminSolicitudes from './pages/AdminSolicitudes'
-import AuditoriaCripto from './pages/AuditoriaCripto'
 import AppLayout from './components/layout/AppLayout'
 import CursorGlow from './components/ui/CursorGlow'
 import SplashScreen from './components/ui/SplashScreen'
@@ -50,7 +49,6 @@ function AnimatedRoutes() {
           <Route path="/pendientes" element={<Protected roles={['farmaceutico']}><Pendientes /></Protected>} />
           <Route path="/dispensaciones" element={<Protected roles={['paciente', 'farmaceutico', 'medico']}><TicketsDispensacion /></Protected>} />
           <Route path="/admin/solicitudes" element={<Protected roles={['admin']}><AdminSolicitudes /></Protected>} />
-          <Route path="/auditoria-cripto" element={<Protected><AuditoriaCripto /></Protected>} />
         </Route>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />

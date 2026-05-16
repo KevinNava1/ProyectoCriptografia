@@ -14,7 +14,6 @@ import {
   X,
   Stamp,
   BarChart3,
-  ScanSearch,
 } from "lucide-react";
 import { useAuthStore } from "../../store/useAuthStore";
 
@@ -96,14 +95,6 @@ function linksForRole(role) {
       icon: ShieldCheck,
       hint: "Aprobar / rechazar",
     });
-  if (role) {
-    base.push({
-      to: "/auditoria-cripto",
-      label: "Auditoría cripto",
-      icon: ScanSearch,
-      hint: "Bytes crudos en BD",
-    });
-  }
   return base;
 }
 

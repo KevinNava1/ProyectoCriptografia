@@ -35,6 +35,21 @@ import {
 //       <article front>    — grid cell, backface hidden
 //       <article back>     — grid cell rotateY 180, backface hidden
 
+// Altura FIJA de la receta. Todas las tarjetas miden exactamente lo mismo en
+// la rejilla, sin importar cuánto texto traiga cada receta. El contenido
+// variable (nombre del medicamento, instrucciones) se recorta con line-clamp
+// para que nunca empuje la altura. 540px cubre el peor caso: nombre a 2
+// líneas + instrucciones a 2 líneas + banner de manipulación.
+const CARD_HEIGHT = 540
+
+// Recorte de texto a N líneas — el sobrante se corta con "…".
+const clampLines = (n) => ({
+  display: '-webkit-box',
+  WebkitLineClamp: n,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+})
+
 // flipped/onFlipChange son OPCIONALES: si se omiten, el componente gestiona
 // su propio estado (modo standalone). Si se pasan, queda controlado por el
 // padre — esto es lo que MisRecetas hace para coordinar "solo una abierta
@@ -76,6 +91,7 @@ export default function RxTemplate({ receta, dimmed = false, flipped: flippedPro
           transition: 'transform 780ms cubic-bezier(.22,1,.36,1)',
           transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
           width: '100%',
+          height: CARD_HEIGHT,
         }}
       >
         {/* ─────────────── ANVERSO ─────────────── */}
@@ -85,7 +101,7 @@ export default function RxTemplate({ receta, dimmed = false, flipped: flippedPro
             gridArea: 'stack',
             backfaceVisibility: 'hidden',
             WebkitBackfaceVisibility: 'hidden',
-            minHeight: 460,
+            height: '100%',
           }}
         >
           <div className="rx-watermark">
@@ -95,15 +111,15 @@ export default function RxTemplate({ receta, dimmed = false, flipped: flippedPro
 
           {tampered && <TamperedBanner motivo={receta.motivo_no_verificada} />}
 
-          <header className="relative px-6 sm:px-8 pt-6 pb-4 flex items-start gap-4 z-10">
-            <DoctorMonogram initials={docInitials} size={56} />
+          <header className="relative px-5 sm:px-6 pt-5 pb-3 flex items-start gap-3.5 z-10">
+            <DoctorMonogram initials={docInitials} size={48} />
             <div className="flex-1 min-w-0">
               <div className="label-xs flex items-center gap-1.5">
                 <ShieldCheck size={11} className="text-[color:var(--emerald)]" />
                 Recetario digital SecureRx
               </div>
               <div className="flex items-baseline gap-2 mt-0.5 flex-wrap">
-                <span className="font-editorial text-[color:var(--blue-deep)]" style={{ fontSize: 22, fontWeight: 700 }}>
+                <span className="font-editorial text-[color:var(--blue-deep)]" style={{ fontSize: 19, fontWeight: 700 }}>
                   Dr. @{receta.medico_username || `id${receta.medico_id}`}
                 </span>
                 <span className="text-[11px] font-mono text-[color:var(--text-secondary)]">
@@ -114,7 +130,7 @@ export default function RxTemplate({ receta, dimmed = false, flipped: flippedPro
             <div
               className="font-editorial italic shrink-0"
               style={{
-                fontSize: 64, fontWeight: 900, letterSpacing: '-0.06em', lineHeight: 0.85,
+                fontSize: 52, fontWeight: 900, letterSpacing: '-0.06em', lineHeight: 0.85,
                 background: 'linear-gradient(135deg,#0A84FF 0%,#0052CC 70%)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 textShadow: '0 4px 18px rgba(10,132,255,0.18)',
@@ -124,21 +140,22 @@ export default function RxTemplate({ receta, dimmed = false, flipped: flippedPro
             </div>
           </header>
 
-          <div className="px-6 sm:px-8">
+          <div className="px-5 sm:px-6">
             <GradientRule />
           </div>
 
-          <section className="relative px-6 sm:px-8 pt-5 z-10 flex-1">
+          <section className="relative px-5 sm:px-6 pt-4 z-10 flex-1" style={{ minHeight: 0, overflow: 'hidden' }}>
             <div className="label-xs flex items-center gap-1.5">
               <Pill size={11} /> Medicamento prescrito
             </div>
             <h2
               className="font-editorial mt-2"
               style={{
-                fontSize: 'clamp(28px, 4vw, 36px)',
+                fontSize: 'clamp(24px, 3.4vw, 30px)',
                 lineHeight: 1.1, fontWeight: 800,
                 color: tampered ? '#B42318' : 'var(--text-primary)',
                 letterSpacing: '-0.02em', wordBreak: 'break-word',
+                ...clampLines(2),
               }}
             >
               {tampered ? '— censurado —' : receta.medicamento}
@@ -147,7 +164,7 @@ export default function RxTemplate({ receta, dimmed = false, flipped: flippedPro
             <div className="flex items-baseline gap-3 flex-wrap mt-3">
               <span
                 className="font-semibold"
-                style={{ fontSize: 18, color: 'var(--blue-deep)', lineHeight: 1.3 }}
+                style={{ fontSize: 16, color: 'var(--blue-deep)', lineHeight: 1.3 }}
               >
                 {tampered ? '—' : receta.dosis}
               </span>
@@ -165,7 +182,10 @@ export default function RxTemplate({ receta, dimmed = false, flipped: flippedPro
                 style={{ background: 'rgba(10,132,255,0.05)', border: '1px solid rgba(10,132,255,0.18)' }}
               >
                 <div className="label-xs mb-1">Instrucciones</div>
-                <p className="text-sm text-[color:var(--text-primary)] leading-relaxed">
+                <p
+                  className="text-sm text-[color:var(--text-primary)] leading-relaxed"
+                  style={clampLines(2)}
+                >
                   {receta.instrucciones}
                 </p>
               </div>
@@ -178,10 +198,10 @@ export default function RxTemplate({ receta, dimmed = false, flipped: flippedPro
           </section>
 
           <div className="relative z-10">
-            <EcgRibbon height={56} color="#0A84FF" />
+            <EcgRibbon height={48} color="#0A84FF" />
           </div>
 
-          <footer className="relative px-6 sm:px-8 pb-6 flex items-center justify-between gap-4 z-10">
+          <footer className="relative px-5 sm:px-6 pb-5 flex items-center justify-between gap-4 z-10">
             <div className="flex items-center gap-3 flex-wrap">
               <StatusChip estado={receta.estado} />
               <div className="text-[10px] font-mono text-[color:var(--text-secondary)] flex items-center gap-1">
@@ -189,7 +209,7 @@ export default function RxTemplate({ receta, dimmed = false, flipped: flippedPro
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <DoctorSeal size={62} initials={docInitials} text="SECURERX · X.509" />
+              <DoctorSeal size={54} initials={docInitials} text="SECURERX · X.509" />
               <button
                 type="button"
                 onClick={() => setFlipped(true)}
@@ -213,7 +233,7 @@ export default function RxTemplate({ receta, dimmed = false, flipped: flippedPro
             backfaceVisibility: 'hidden',
             WebkitBackfaceVisibility: 'hidden',
             transform: 'rotateY(180deg)',
-            minHeight: 460,
+            height: '100%',
           }}
         >
           <CrossPattern />
@@ -221,11 +241,11 @@ export default function RxTemplate({ receta, dimmed = false, flipped: flippedPro
             <RxMonogram size={360} color="#0052CC" />
           </div>
 
-          <header className="relative px-6 sm:px-8 pt-6 pb-3 flex items-center gap-3 z-10">
+          <header className="relative px-5 sm:px-6 pt-5 pb-3 flex items-center gap-3 z-10">
             <ShieldCheck size={22} className="text-[color:var(--cyan)]" />
             <div className="flex-1 min-w-0">
               <div className="label-xs">Sello criptográfico</div>
-              <h3 className="font-editorial text-2xl" style={{ fontWeight: 700 }}>
+              <h3 className="font-editorial text-xl" style={{ fontWeight: 700 }}>
                 Receta #{receta.id}
               </h3>
             </div>
@@ -234,11 +254,11 @@ export default function RxTemplate({ receta, dimmed = false, flipped: flippedPro
             </button>
           </header>
 
-          <div className="px-6 sm:px-8">
+          <div className="px-5 sm:px-6">
             <GradientRule />
           </div>
 
-          <section className="relative px-6 sm:px-8 py-5 z-10 space-y-4 flex-1 overflow-auto">
+          <section className="relative px-5 sm:px-6 py-5 z-10 space-y-4 flex-1 overflow-auto">
             <div>
               <div className="label-xs mb-1.5 flex items-center gap-1.5">
                 <Hash size={11} /> Huella SHA3-256 (firmada por ECDSA P-256)
@@ -261,7 +281,7 @@ export default function RxTemplate({ receta, dimmed = false, flipped: flippedPro
             )}
           </section>
 
-          <footer className="relative px-6 sm:px-8 pb-5 z-10 flex items-center justify-between border-t border-[var(--border-subtle)] pt-4">
+          <footer className="relative px-5 sm:px-6 pb-5 z-10 flex items-center justify-between border-t border-[var(--border-subtle)] pt-4">
             <div className="text-[10px] font-mono text-[color:var(--text-secondary)]">
               X.509 v3 · CA SecureRx · {fechaCorta}
             </div>

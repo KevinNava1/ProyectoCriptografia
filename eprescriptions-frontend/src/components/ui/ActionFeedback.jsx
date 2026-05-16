@@ -38,11 +38,15 @@ export default function ActionFeedback({
   const inner = (
     <motion.div
       key={`feedback-${mode}`}
-      initial={{ opacity: 0, scale: 0.85 }}
-      animate={{ opacity: 1, scale: 1 }}
+      initial={{ opacity: 0, scale: 0.85, y: 8 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
       transition={{ type: 'spring', stiffness: 240, damping: 18 }}
-      className="flex flex-col items-center"
+      className="flex flex-col items-center px-9 py-8 rounded-3xl"
+      style={{
+        background: '#FFFFFF',
+        boxShadow: `0 24px 64px rgba(10,25,48,0.32), 0 0 0 6px ${meta.halo}`,
+      }}
     >
       <div className="relative">
         <motion.span
@@ -111,8 +115,8 @@ export default function ActionFeedback({
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.55, duration: 0.3 }}
-          className="font-heading text-base mt-3 uppercase tracking-wider"
-          style={{ color: meta.main }}
+          className="font-heading text-sm mt-4 uppercase tracking-wider px-4 py-1.5 rounded-lg"
+          style={{ background: meta.main, color: '#FFFFFF' }}
         >
           {label}
         </motion.div>
@@ -131,7 +135,7 @@ export default function ActionFeedback({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
             className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none"
-            style={{ background: 'rgba(10,25,48,0.34)', backdropFilter: 'blur(2px)' }}
+            style={{ background: 'rgba(10,25,48,0.62)', backdropFilter: 'blur(3px)' }}
           >
             {inner}
           </motion.div>
