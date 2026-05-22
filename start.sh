@@ -95,6 +95,7 @@ printf "${BOLD}${GREEN}═══════════════════
 echo "  Backend  →  https://localhost           (TLS 1.3 vía nginx)"
 echo "  Frontend →  http://localhost:5173       (Vite dev server)"
 echo "  API docs →  https://localhost/docs"
+echo "  Adminer  →  http://localhost:8081       (GUI de la base de datos)"
 echo ""
 warn "PRIMERA VEZ: abre https://localhost en el navegador, clic en"
 warn "  'Avanzado' → 'Continuar a localhost'. Esto registra el cert"

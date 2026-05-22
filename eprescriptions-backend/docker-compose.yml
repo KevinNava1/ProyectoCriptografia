@@ -72,6 +72,19 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./certs:/etc/nginx/certs:ro
 
+  # GUI web para inspeccionar la base de datos en http://localhost:8081
+  # Habla con `db` por la red interna de docker-compose; MySQL nunca se
+  # publica al host. Es una herramienta de desarrollo — quítala en producción.
+  adminer:
+    image: adminer:5
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+
 volumes:
   dbdata:
   ca-data:
