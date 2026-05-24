@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
@@ -13,6 +13,7 @@ import {
   X,
   Hash,
   ShieldCheck,
+  QrCode,
 } from "lucide-react";
 import PageTransition from "../components/ui/PageTransition";
 import SecureCard from "../components/ui/SecureCard";
@@ -33,6 +34,7 @@ import { formatDate } from "../lib/utils";
 const MODES = [
   { id: "id", label: "Por ID de receta", icon: Hash },
   { id: "usuario", label: "Por usuario del paciente", icon: User },
+  { id: "qr", label: "Escanear QR", icon: QrCode },
 ];
 
 export default function Pendientes() {
@@ -280,7 +282,7 @@ export default function Pendientes() {
                 {searching ? "Buscando…" : "Buscar"}
               </motion.button>
             </form>
-          ) : (
+          ) : mode === "usuario" ? (
             <div className="flex-1">
               <div className="label-xs mb-1.5">Usuario del paciente</div>
               <div className="relative">
@@ -365,6 +367,42 @@ export default function Pendientes() {
                 </div>
               )}
             </div>
+          ) : (
+            <QRScanner
+              onResult={(id) => {
+                // 1. Forzamos el cambio de pestaña.
+                // Esto desmonta el QRScanner y apaga la cámara de inmediato.
+                setMode("id");
+                setQueryId(id);
+
+                // 2. Disparamos la búsqueda y apertura del modal
+                setSearching(true);
+                setSearchError(null);
+                setRecetas([]);
+
+                recetasAPI
+                  .porId(id)
+                  .then(({ data }) => {
+                    if (
+                      !["activa", "en_proceso", "emitida"].includes(data.estado)
+                    ) {
+                      setSearchError(
+                        `Receta no disponible para dispensar (estado: ${data.estado})`,
+                      );
+                    } else {
+                      setPicked(data); // Abre el modal de dispensación
+                      setPhase("idle");
+                    }
+                  })
+                  .catch((err) => {
+                    const status = err?.response?.status;
+                    if (status === 404)
+                      setSearchError("No se encontró la receta.");
+                    else setSearchError(err?.uiMessage || "Error al buscar.");
+                  })
+                  .finally(() => setSearching(false));
+              }}
+            />
           )}
         </SecureCard>
 
@@ -397,10 +435,7 @@ export default function Pendientes() {
               className="grid gap-4"
             >
               {recetas.map((r) => (
-                <motion.div
-                  key={r.id}
-                  variants={listItem}
-                >
+                <motion.div key={r.id} variants={listItem}>
                   <SecureCard className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
                     <div className="flex items-start gap-4 min-w-0 flex-1">
                       <div
@@ -481,7 +516,10 @@ export default function Pendientes() {
                 }}
               >
                 <div className="label-xs mb-1">Instrucciones del médico</div>
-                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+                <p
+                  className="text-sm leading-relaxed"
+                  style={{ color: "var(--text-primary)" }}
+                >
                   {picked.instrucciones}
                 </p>
               </div>
@@ -613,5 +651,77 @@ export default function Pendientes() {
         )}
       </Modal>
     </PageTransition>
+  );
+}
+
+function QRScanner({ onResult }) {
+  useEffect(() => {
+    let isMounted = true;
+    let qr = null;
+
+    // Delegamos la inicialización a la cola de macrotareas.
+    // 150ms es suficiente para que el Strict Mode termine su ciclo.
+    const timer = setTimeout(() => {
+      if (!isMounted) return;
+
+      import("html5-qrcode").then(({ Html5Qrcode }) => {
+        if (!isMounted) return;
+
+        const containerId = "qr-scanner-pendientes";
+        const container = document.getElementById(containerId);
+        if (container) container.innerHTML = "";
+
+        qr = new Html5Qrcode(containerId);
+
+        qr.start(
+          { facingMode: "environment" },
+          { fps: 12, qrbox: { width: 280, height: 280 } },
+          (decoded) => {
+            const id = decoded.trim();
+            if (/^\d+$/.test(id)) {
+              // Congela el frame de video para dar feedback visual de éxito
+              qr.pause(true);
+              onResult(id);
+            }
+          },
+          () => {}, // Callback silencioso para los frames sin QR
+        ).catch((err) => {
+          console.warn("Inicialización de hardware abortada/fallida:", err);
+        });
+      });
+    }, 150);
+
+    return () => {
+      isMounted = false;
+      // Si fue un montaje fantasma, cancelamos el timer antes de que inicie la cámara
+      clearTimeout(timer);
+
+      if (qr) {
+        try {
+          const state = qr.getState();
+          // Solo detenemos el hardware si el estado interno es SCANNING (2) o PAUSED (3)
+          if (state === 2 || state === 3) {
+            qr.stop().catch(() => {});
+          }
+        } catch (e) {
+          console.warn("Excepción al liberar el stream de video:", e);
+        }
+      }
+    };
+  }, [onResult]);
+
+  return (
+    <div className="space-y-3">
+      <div className="label-xs">Apunta la cámara al QR de la receta</div>
+      <div
+        id="qr-scanner-pendientes"
+        className="rounded-xl overflow-hidden w-full bg-[rgba(10,36,67,0.02)] relative flex items-center justify-center"
+        style={{ minHeight: 300 }}
+      />
+      <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+        Al leer el QR, la cámara se apagará, cambiarás a la vista por ID y la
+        receta se abrirá automáticamente para dispensar.
+      </p>
+    </div>
   );
 }

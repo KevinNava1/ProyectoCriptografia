@@ -14,6 +14,7 @@ import {
   X,
   Stamp,
   BarChart3,
+  QrCode,
 } from "lucide-react";
 import { useAuthStore } from "../../store/useAuthStore";
 
