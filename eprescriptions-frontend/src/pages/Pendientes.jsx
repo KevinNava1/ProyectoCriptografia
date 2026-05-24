@@ -13,6 +13,7 @@ import {
   X,
   Hash,
   ShieldCheck,
+  ShieldAlert,
   QrCode,
 } from "lucide-react";
 import PageTransition from "../components/ui/PageTransition";
@@ -159,6 +160,11 @@ export default function Pendientes() {
 
   // ── Dispensar ────────────────────────────────────────────────
   const dispense = async () => {
+    if (picked?.cripto_ok === false) {
+      return toast.error(
+        "Verificación criptográfica fallida — esta receta no puede dispensarse."
+      );
+    }
     const v = validateKeysBundle(key, ["ec", "rsa"]);
     if (!v.ok) return toast.error(v.reason);
     setPhase("verifying");
@@ -500,6 +506,48 @@ export default function Pendientes() {
       >
         {picked && (
           <div className="space-y-5">
+            {/* Alerta de integridad: la firma del médico no verifica */}
+            {picked.cripto_ok === false && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-start gap-3 p-4 rounded-xl"
+                style={{
+                  background: "rgba(180,35,24,0.08)",
+                  border: "1px solid rgba(180,35,24,0.42)",
+                }}
+              >
+                <ShieldAlert
+                  size={22}
+                  style={{ color: "#B42318" }}
+                  className="shrink-0 mt-0.5"
+                />
+                <div className="min-w-0">
+                  <div
+                    className="font-heading text-sm"
+                    style={{ color: "#B42318" }}
+                  >
+                    Verificación criptográfica fallida
+                  </div>
+                  <div
+                    className="text-xs mt-1 leading-relaxed"
+                    style={{ color: "#7A1F12" }}
+                  >
+                    {picked.motivo_no_verificada ||
+                      "La firma digital ECDSA P-256 + SHA3-256 del médico emisor no coincide con el contenido cifrado de esta receta. Esto indica que el documento pudo haber sido alterado posteriormente a su emisión."}
+                  </div>
+                  <div
+                    className="text-[11px] mt-2 font-medium"
+                    style={{ color: "#B42318" }}
+                  >
+                    Por motivos de seguridad, la dispensación está bloqueada.
+                    Contacte al médico emisor o al equipo de soporte de
+                    SecureRx.
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
             {/* Ticket preview — vista premium del medicamento + actores */}
             <DispensationTicketPreview
               receta={picked}
@@ -638,13 +686,29 @@ export default function Pendientes() {
                 Cancelar
               </button>
               <motion.button
-                whileHover={phase === "idle" ? { scale: 1.02 } : undefined}
-                whileTap={phase === "idle" ? { scale: 0.98 } : undefined}
+                whileHover={
+                  phase === "idle" && picked.cripto_ok !== false
+                    ? { scale: 1.02 }
+                    : undefined
+                }
+                whileTap={
+                  phase === "idle" && picked.cripto_ok !== false
+                    ? { scale: 0.98 }
+                    : undefined
+                }
                 className="btn btn-success"
                 onClick={dispense}
-                disabled={phase !== "idle"}
+                disabled={phase !== "idle" || picked.cripto_ok === false}
+                title={
+                  picked.cripto_ok === false
+                    ? "Receta con verificación criptográfica fallida — no puede dispensarse"
+                    : undefined
+                }
               >
-                <Stamp size={14} /> Confirmar dispensado
+                <Stamp size={14} />{" "}
+                {picked.cripto_ok === false
+                  ? "Dispensación bloqueada"
+                  : "Confirmar dispensado"}
               </motion.button>
             </div>
           </div>

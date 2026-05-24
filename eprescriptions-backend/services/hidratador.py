@@ -56,8 +56,12 @@ def hidratar(
         instrucciones = ""
         fecha = contenido.get("fecha_creacion", contenido.get("fecha", ""))
         motivo_no_verificada = (
-            "La firma ECDSA del médico no verifica contra el contenido "
-            "descifrado. Receta posiblemente manipulada — no la consumas."
+            "La firma digital ECDSA P-256 + SHA3-256 del médico emisor no "
+            "coincide con el contenido descifrado de esta receta. Esto indica "
+            "que el documento pudo haber sido alterado posteriormente a su "
+            "emisión. Por motivos de seguridad, absténgase de utilizar esta "
+            "prescripción y contacte a su médico tratante o al equipo de "
+            "soporte de SecureRx."
         )
 
     return RecetaDescifrada(

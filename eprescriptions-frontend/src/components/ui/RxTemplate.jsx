@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Pill,
@@ -13,15 +14,16 @@ import {
   Copy,
   Check,
   QrCode,
+  FileDown,
 } from "lucide-react";
 import StatusChip from "./StatusChip";
 import CryptoHash from "./CryptoHash";
 import QRReceta from "./QRReceta";
 import { formatDate } from "../../lib/utils";
+import { downloadRecetaPdf } from "../../lib/recetaPdf";
 import {
   RxMonogram,
   CapsulePill,
-  DoctorSeal,
   EcgRibbon,
   CrossPattern,
   DoctorMonogram,
@@ -116,7 +118,7 @@ export default function RxTemplate({
       >
         {/* ─────────────── ANVERSO ─────────────── */}
         <article
-          className="glass-template overflow-hidden flex flex-col"
+          className="glass-template rx-face overflow-hidden flex flex-col"
           style={{
             gridArea: "stack",
             backfaceVisibility: "hidden",
@@ -255,31 +257,43 @@ export default function RxTemplate({
             <EcgRibbon height={48} color="#0A84FF" />
           </div>
 
-          <footer className="relative px-5 sm:px-6 pb-5 flex items-center justify-between gap-4 z-10">
-            <div className="flex items-center gap-3 flex-wrap">
+          <footer className="relative px-5 sm:px-6 pb-5 flex items-center justify-between gap-3 z-10 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap min-w-0">
               <StatusChip estado={receta.estado} />
               <div className="text-[10px] font-mono text-[color:var(--text-secondary)] flex items-center gap-1">
                 <Hash size={9} /> #{receta.id}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
               <button
                 type="button"
                 onClick={() => setQrOpen((v) => !v)}
-                className="btn btn-ghost btn-sm"
+                className="btn btn-ghost btn-sm shrink-0"
                 style={qrOpen ? { color: "var(--cyan, #0A84FF)" } : undefined}
+                title="Mostrar código QR"
               >
                 <QrCode size={12} /> QR
               </button>
-              <DoctorSeal
-                size={54}
-                initials={docInitials}
-                text="SECURERX · X.509"
-              />
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await downloadRecetaPdf(receta);
+                  } catch (err) {
+                    console.error(err);
+                    toast.error("No se pudo generar el PDF de la receta");
+                  }
+                }}
+                className="btn btn-ghost btn-sm shrink-0"
+                title="Descargar receta en PDF"
+              >
+                <FileDown size={12} /> PDF
+              </button>
               <button
                 type="button"
                 onClick={() => setFlipped(true)}
-                className="btn btn-ghost btn-sm"
+                className="btn btn-ghost btn-sm shrink-0"
+                title="Ver firma criptográfica"
               >
                 <RotateCw size={12} /> Firma
               </button>
@@ -315,7 +329,7 @@ export default function RxTemplate({
 
         {/* ─────────────── REVERSO ─────────────── */}
         <article
-          className="glass-template overflow-hidden flex flex-col"
+          className="glass-template rx-face overflow-hidden flex flex-col"
           style={{
             gridArea: "stack",
             backfaceVisibility: "hidden",
@@ -415,11 +429,11 @@ function TamperedBanner({ motivo }) {
       />
       <div className="min-w-0">
         <div className="font-heading text-sm" style={{ color: "#B42318" }}>
-          Receta NO verificada
+          Verificación criptográfica fallida
         </div>
-        <div className="text-[11px] mt-0.5" style={{ color: "#7A1F12" }}>
+        <div className="text-[11px] mt-0.5 leading-relaxed" style={{ color: "#7A1F12" }}>
           {motivo ||
-            "La firma ECDSA del médico no verifica. No consumas el medicamento; contacta a tu médico."}
+            "La firma digital ECDSA P-256 + SHA3-256 del médico emisor no coincide con el contenido cifrado de esta receta. Esto indica que el documento pudo haber sido alterado posteriormente a su emisión. Por motivos de seguridad, absténgase de utilizar esta prescripción y contacte a su médico tratante o al equipo de soporte de SecureRx."}
         </div>
       </div>
     </div>

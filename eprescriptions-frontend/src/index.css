@@ -512,6 +512,21 @@ input[type="checkbox"] {
   pointer-events: none;
 }
 
+/* Cara opaca para la receta volteable.
+   El truco del flip 3D apila anverso/reverso en la misma celda con
+   backface-visibility:hidden. Como el glass-template es traslúcido,
+   en algunos navegadores el reverso deja ver el anverso a través.
+   .rx-face fija una capa de fondo opaca (sin perder el degradé) para
+   que cada cara cubra completamente a la otra. */
+.rx-face {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.92), rgba(244,250,255,0.88)),
+    #FFFFFF;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  isolation: isolate;
+}
+
 /* ─────────── Patrón decorativo recetario (caduceo SVG inline) ─────────── */
 .rx-pattern {
   background-image:
