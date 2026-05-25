@@ -15,7 +15,9 @@ import {
   ShieldCheck,
   ShieldAlert,
   QrCode,
+  CheckCircle,
 } from "lucide-react";
+import ShieldLogo from "../components/3d/ShieldLogo";
 import PageTransition from "../components/ui/PageTransition";
 import SecureCard from "../components/ui/SecureCard";
 import StatusChip from "../components/ui/StatusChip";
@@ -28,6 +30,9 @@ import Spinner from "../components/ui/Spinner";
 import ActionFeedback from "../components/ui/ActionFeedback";
 import { DispensationTicketPreview } from "../components/ui/DispensationTicket";
 import { listContainer, listItem } from "../lib/animations";
+import RxTemplate from "../components/ui/RxTemplate";
+import PageHero from "../components/ui/PageHero";
+import iconAmbulance from "../assets/icons/ambulance.png";
 import { useAuthStore } from "../store/useAuthStore";
 import { recetasAPI, usuariosAPI } from "../api";
 import { formatDate } from "../lib/utils";
@@ -63,6 +68,7 @@ export default function Pendientes() {
   const [key, setKey] = useState(user?.llave_privada || "");
   const [phase, setPhase] = useState("idle");
   const [observaciones, setObservaciones] = useState("");
+  const [dispenseErr, setDispenseErr] = useState(null); // mensaje del overlay rojo
 
   // ── Búsqueda por ID ──────────────────────────────────────────
   const buscarPorId = async (e) => {
@@ -177,16 +183,24 @@ export default function Pendientes() {
       if (!ok) throw new Error("Alguna verificación falló");
       setPhase("success");
       toast.success(`Receta #${data.receta_id} dispensada`);
+      // 2.6s para que la animación verde tipo "Email verificado" se vea
+      // completa antes de cerrar el modal y volver al estado inicial.
       setTimeout(() => {
         setPicked(null);
         setPhase("idle");
-        setObservaciones(""); //Limpieza del campo
+        setObservaciones("");
         limpiar();
-      }, 1400);
+      }, 2600);
     } catch (err) {
+      const msg = err?.uiMessage || err?.message || "No se pudo dispensar";
+      setDispenseErr(msg);
       setPhase("error");
-      toast.error(err?.uiMessage || err?.message || "No se pudo dispensar");
-      setTimeout(() => setPhase("idle"), 1200);
+      toast.error(msg);
+      // 2.6s para que la animación roja se vea completa, igual que el éxito.
+      setTimeout(() => {
+        setPhase("idle");
+        setDispenseErr(null);
+      }, 2600);
     }
   };
 
@@ -199,19 +213,13 @@ export default function Pendientes() {
   return (
     <PageTransition>
       <div className="space-y-6">
-        {/* Header */}
-        <header>
-          <div className="label-xs">Farmacéutico · @{user?.username}</div>
-          <h1 className="font-heading text-3xl md:text-4xl mt-2 flex items-center gap-3">
-            <ClipboardList className="text-[color:var(--cyan)]" /> Dispensar
-            receta
-          </h1>
-          <p className="text-[color:var(--text-secondary)] text-sm mt-2 max-w-xl">
-            Busca por ID de receta o por el usuario del paciente. Cada
-            dispensado verifica AES-GCM y la firma ECDSA P-256 + SHA3-256 antes
-            de sellarse.
-          </p>
-        </header>
+        <PageHero
+          eyebrow={`Farmacéutico · @${user?.username || ""}`}
+          title="Dispensar receta"
+          subtitle="Busca por ID o por usuario del paciente."
+          iconImg={iconAmbulance}
+          accent="#0A84FF"
+        />
 
         {/* Selector de modo */}
         <div className="flex gap-2 flex-wrap">
@@ -396,8 +404,12 @@ export default function Pendientes() {
                         `Receta no disponible para dispensar (estado: ${data.estado})`,
                       );
                     } else {
-                      setPicked(data); // Abre el modal de dispensación
+                      // Mostrar la receta en el grid (mismo formato visual
+                      // que cuando se busca por paciente). El usuario hace
+                      // click en "Dispensar" cuando esté listo.
+                      setRecetas([data]);
                       setPhase("idle");
+                      toast.success(`Receta #${data.id} encontrada`);
                     }
                   })
                   .catch((err) => {
@@ -438,58 +450,35 @@ export default function Pendientes() {
               initial="initial"
               animate="animate"
               exit={{ opacity: 0 }}
-              className="grid gap-4"
+              className="grid gap-4 md:grid-cols-2"
             >
-              {recetas.map((r) => (
-                <motion.div key={r.id} variants={listItem}>
-                  <SecureCard className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
-                    <div className="flex items-start gap-4 min-w-0 flex-1">
-                      <div
-                        className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
-                        style={{
-                          background: "rgba(10,132,255,0.10)",
-                          border: "1px solid rgba(10,132,255,0.32)",
-                        }}
-                      >
-                        <Pill className="text-[color:var(--cyan)]" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <div className="font-heading text-lg truncate">
-                            {r.medicamento}
-                          </div>
-                          <StatusChip estado={r.estado} />
-                        </div>
-                        <div className="text-xs text-[color:var(--text-secondary)] flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
-                          <span>
-                            {r.dosis} · x{r.cantidad}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Stethoscope size={11} /> dr.@
-                            {r.medico_username || r.medico_id}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <User size={11} /> @
-                            {r.paciente_username || r.paciente_id}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Calendar size={11} /> {formatDate(r.fecha)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <motion.button
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => {
-                        setPicked(r);
-                        setPhase("idle");
-                      }}
-                      className="btn btn-primary shrink-0"
-                    >
-                      <Stamp size={14} /> Dispensar
-                    </motion.button>
-                  </SecureCard>
+              {(() => {
+                // Cola priorizada: recetas EN PROCESO (con dispensaciones ya
+                // hechas) primero — el paciente ya está a mitad de tratamiento
+                // y no debe esperar. Dentro de cada grupo, por fecha asc
+                // (la más vieja es la que ha esperado más).
+                const sorted = [...recetas].sort((a, b) => {
+                  const aProc = (a.dispensaciones_realizadas || 0) > 0 ? 0 : 1;
+                  const bProc = (b.dispensaciones_realizadas || 0) > 0 ? 0 : 1;
+                  if (aProc !== bProc) return aProc - bProc;
+                  return new Date(a.fecha) - new Date(b.fecha);
+                });
+                return sorted;
+              })().map((r) => (
+                <motion.div key={r.id} variants={listItem} className="flex flex-col gap-2">
+                  <RxTemplate receta={r} role="farmaceutico" />
+                  {/* Acción del farma: dispensar esta receta. */}
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => {
+                      setPicked(r);
+                      setPhase("idle");
+                    }}
+                    className="btn btn-primary"
+                  >
+                    <Stamp size={14} /> Dispensar receta #{r.id}
+                  </motion.button>
                 </motion.div>
               ))}
             </motion.div>
@@ -504,6 +493,248 @@ export default function Pendientes() {
         title={`Dispensar receta #${picked?.id ?? ""}`}
         wide
       >
+        {/* Overlay de éxito al estilo "Email verificado" — aparece encima
+            del modal cuando la dispensación se completa cripto-firmada. */}
+        <AnimatePresence>
+          {phase === "success" && picked && (
+            <motion.div
+              key="dispensada-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="absolute inset-0 flex items-center justify-center z-30 rounded-2xl overflow-hidden"
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(0,168,112,0.18) 0%, rgba(255,255,255,0.98) 60%)",
+              }}
+            >
+              {/* Halos decorativos verdes */}
+              <div
+                aria-hidden
+                className="absolute pointer-events-none"
+                style={{
+                  top: "-20%", left: "-10%", width: 360, height: 360,
+                  background: "radial-gradient(circle, rgba(0,168,112,0.35), transparent 65%)",
+                  filter: "blur(40px)",
+                }}
+              />
+              <div
+                aria-hidden
+                className="absolute pointer-events-none"
+                style={{
+                  bottom: "-15%", right: "-10%", width: 320, height: 320,
+                  background: "radial-gradient(circle, rgba(79,209,197,0.30), transparent 65%)",
+                  filter: "blur(40px)",
+                }}
+              />
+
+              <motion.div
+                initial={{ scale: 0.88, y: 12 }}
+                animate={{ scale: 1, y: 0 }}
+                transition={{ type: "spring", stiffness: 260, damping: 20 }}
+                className="relative z-10 text-center px-6 py-8"
+              >
+                <div className="flex justify-center mb-5">
+                  <ShieldLogo size={64} />
+                </div>
+
+                {/* Anillos pulsantes detrás del check */}
+                {[0, 0.18, 0.36].map((d, i) => (
+                  <motion.span
+                    key={i}
+                    aria-hidden
+                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+                    initial={{ scale: 0.3, opacity: 0.85 }}
+                    animate={{ scale: 3.6, opacity: 0 }}
+                    transition={{ duration: 1.4, delay: d, ease: "easeOut", repeat: 1 }}
+                    style={{
+                      width: 120, height: 120,
+                      border: "2px solid rgba(0,168,112,0.7)",
+                      boxShadow: "0 0 36px rgba(0,168,112,0.45)",
+                    }}
+                  />
+                ))}
+
+                <motion.div
+                  initial={{ scale: 0, rotate: -90, opacity: 0 }}
+                  animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 280, damping: 14, delay: 0.12 }}
+                  className="relative z-10 inline-block"
+                >
+                  <CheckCircle
+                    size={72}
+                    style={{ color: "#00A870" }}
+                    strokeWidth={2.4}
+                  />
+                </motion.div>
+
+                <motion.h1
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.35 }}
+                  className="font-heading mt-5 uppercase"
+                  style={{
+                    fontSize: "clamp(28px, 4vw, 36px)",
+                    color: "#00775A",
+                    letterSpacing: "0.08em",
+                    textShadow: "0 4px 18px rgba(0,168,112,0.30)",
+                  }}
+                >
+                  Dispensada
+                </motion.h1>
+
+                <motion.p
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.5 }}
+                  className="text-sm mt-2"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  Receta <strong style={{ color: "#0B2443" }}>#{picked.id}</strong> · sello criptográfico registrado
+                </motion.p>
+
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.4, delay: 0.7 }}
+                  className="inline-flex items-center gap-1.5 mt-4 px-3 py-1.5 rounded-full text-[11px] font-mono font-bold"
+                  style={{
+                    background: "linear-gradient(135deg, #00875E 0%, #006044 100%)",
+                    color: "#FFFFFF",
+                    boxShadow: "0 6px 16px rgba(0,77,51,0.40)",
+                  }}
+                >
+                  <ShieldCheck size={13}/> ECDSA + AES-GCM verificados
+                </motion.div>
+              </motion.div>
+            </motion.div>
+          )}
+
+          {/* Overlay de ERROR — versión roja del éxito, con el mensaje
+              capturado en `dispenseErr`. Anillos en rojo, shield-alert
+              en lugar de check, shake horizontal sutil. */}
+          {phase === "error" && picked && (
+            <motion.div
+              key="dispensada-error-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="absolute inset-0 flex items-center justify-center z-30 rounded-2xl overflow-hidden"
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(220,40,40,0.20) 0%, rgba(255,255,255,0.98) 60%)",
+              }}
+            >
+              {/* Halos decorativos rojos */}
+              <div
+                aria-hidden
+                className="absolute pointer-events-none"
+                style={{
+                  top: "-20%", left: "-10%", width: 360, height: 360,
+                  background: "radial-gradient(circle, rgba(220,40,40,0.35), transparent 65%)",
+                  filter: "blur(40px)",
+                }}
+              />
+              <div
+                aria-hidden
+                className="absolute pointer-events-none"
+                style={{
+                  bottom: "-15%", right: "-10%", width: 320, height: 320,
+                  background: "radial-gradient(circle, rgba(252,165,165,0.45), transparent 65%)",
+                  filter: "blur(40px)",
+                }}
+              />
+
+              <motion.div
+                initial={{ scale: 0.88, y: 12 }}
+                animate={{ scale: 1, y: 0, x: [0, -6, 6, -4, 4, 0] }}
+                transition={{
+                  scale: { type: "spring", stiffness: 260, damping: 20 },
+                  y: { type: "spring", stiffness: 260, damping: 20 },
+                  x: { duration: 0.5, delay: 0.15 },
+                }}
+                className="relative z-10 text-center px-6 py-8 max-w-md"
+              >
+                <div className="flex justify-center mb-5">
+                  <ShieldLogo size={64} />
+                </div>
+
+                {/* Anillos rojos pulsantes */}
+                {[0, 0.18, 0.36].map((d, i) => (
+                  <motion.span
+                    key={i}
+                    aria-hidden
+                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+                    initial={{ scale: 0.3, opacity: 0.85 }}
+                    animate={{ scale: 3.6, opacity: 0 }}
+                    transition={{ duration: 1.4, delay: d, ease: "easeOut", repeat: 1 }}
+                    style={{
+                      width: 120, height: 120,
+                      border: "2px solid rgba(220,40,40,0.75)",
+                      boxShadow: "0 0 36px rgba(220,40,40,0.50)",
+                    }}
+                  />
+                ))}
+
+                <motion.div
+                  initial={{ scale: 0, rotate: -90, opacity: 0 }}
+                  animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 280, damping: 14, delay: 0.12 }}
+                  className="relative z-10 inline-block"
+                >
+                  <ShieldAlert
+                    size={72}
+                    style={{ color: "#DC2828" }}
+                    strokeWidth={2.4}
+                  />
+                </motion.div>
+
+                <motion.h1
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.35 }}
+                  className="font-heading mt-5 uppercase"
+                  style={{
+                    fontSize: "clamp(26px, 3.6vw, 32px)",
+                    color: "#9A1410",
+                    letterSpacing: "0.08em",
+                    textShadow: "0 4px 18px rgba(180,35,24,0.30)",
+                  }}
+                >
+                  No se pudo dispensar
+                </motion.h1>
+
+                <motion.p
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.5 }}
+                  className="text-sm mt-3 leading-relaxed"
+                  style={{ color: "#7A1F12" }}
+                >
+                  {dispenseErr ||
+                    "Una verificación criptográfica falló o la receta no es válida en este momento."}
+                </motion.p>
+
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.4, delay: 0.7 }}
+                  className="inline-flex items-center gap-1.5 mt-4 px-3 py-1.5 rounded-full text-[11px] font-mono font-bold"
+                  style={{
+                    background: "linear-gradient(135deg, #DC2828 0%, #9A1410 100%)",
+                    color: "#FFFFFF",
+                    boxShadow: "0 6px 16px rgba(180,35,24,0.40)",
+                  }}
+                >
+                  <ShieldAlert size={13}/> Receta #{picked.id} no dispensada
+                </motion.div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {picked && (
           <div className="space-y-5">
             {/* Alerta de integridad: la firma del médico no verifica */}

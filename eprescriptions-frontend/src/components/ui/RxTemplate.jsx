@@ -19,6 +19,7 @@ import {
 import StatusChip from "./StatusChip";
 import CryptoHash from "./CryptoHash";
 import QRReceta from "./QRReceta";
+import Modal from "./Modal";
 import { formatDate } from "../../lib/utils";
 import { downloadRecetaPdf } from "../../lib/recetaPdf";
 import {
@@ -29,6 +30,7 @@ import {
   DoctorMonogram,
   GradientRule,
 } from "../illustrations/MedicalAssets";
+import prescriptionBg from "../../assets/prescription-bg.png";
 
 // Plantilla premium de receta — flip 3D con CSS Grid stacking.
 //
@@ -56,7 +58,7 @@ import {
 // variable (nombre del medicamento, instrucciones) se recorta con line-clamp
 // para que nunca empuje la altura. 540px cubre el peor caso: nombre a 2
 // líneas + instrucciones a 2 líneas + banner de manipulación.
-const CARD_HEIGHT = 540;
+const CARD_HEIGHT = 580;
 
 // Recorte de texto a N líneas — el sobrante se corta con "…".
 const clampLines = (n) => ({
@@ -75,7 +77,13 @@ export default function RxTemplate({
   dimmed = false,
   flipped: flippedProp,
   onFlipChange,
+  role = "paciente",
 }) {
+  // QR y PDF de la receta son acciones del paciente (lleva su QR a la
+  // farmacia / descarga su PDF). El médico y el farmacéutico tienen sus
+  // propias vistas; aquí solo les mostramos la firma cripto.
+  const showQR = role === "paciente";
+  const showPDF = role === "paciente";
   const [flippedLocal, setFlippedLocal] = useState(false);
   const isControlled = typeof flippedProp === "boolean";
   const flipped = isControlled ? flippedProp : flippedLocal;
@@ -124,12 +132,17 @@ export default function RxTemplate({
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
             height: "100%",
+            // SOLO el fondo de la imagen — el formato (header, monograma,
+            // EcgRibbon, etc.) vuelve a ser el original.
+            backgroundImage: `url(${prescriptionBg})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center top",
+            backgroundRepeat: "no-repeat",
           }}
         >
-          <div className="rx-watermark">
-            <RxMonogram size={420} color="#0A84FF" />
-          </div>
-          <CrossPattern />
+          {/* RxMonogram + CrossPattern removidos del anverso —
+              el nuevo fondo (caduceo + olas) ya es la marca de agua y las
+              cruces decorativas se veían como ruido. */}
 
           {tampered && <TamperedBanner motivo={receta.motivo_no_verificada} />}
 
@@ -145,7 +158,7 @@ export default function RxTemplate({
               </div>
               <div className="flex items-baseline gap-2 mt-0.5 flex-wrap">
                 <span
-                  className="font-editorial text-[color:var(--blue-deep)]"
+                  className="font-heading text-[color:var(--blue-deep)]"
                   style={{ fontSize: 19, fontWeight: 700 }}
                 >
                   Dr. @{receta.medico_username || `id${receta.medico_id}`}
@@ -156,16 +169,18 @@ export default function RxTemplate({
               </div>
             </div>
             <div
-              className="font-editorial italic shrink-0"
+              className="font-heading italic shrink-0"
               style={{
-                fontSize: 52,
+                fontSize: 30,
                 fontWeight: 900,
-                letterSpacing: "-0.06em",
+                letterSpacing: "-0.15em",
                 lineHeight: 0.85,
+                transform: "scaleX(0.78)",
+                transformOrigin: "right center",
                 background: "linear-gradient(135deg,#0A84FF 0%,#0052CC 70%)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
-                textShadow: "0 4px 18px rgba(10,132,255,0.18)",
+                textShadow: "0 3px 12px rgba(10,132,255,0.18)",
               }}
             >
               Rx
@@ -183,8 +198,10 @@ export default function RxTemplate({
             <div className="label-xs flex items-center gap-1.5">
               <Pill size={11} /> Medicamento prescrito
             </div>
+            {/* MEDICAMENTO — fuente DM Sans (sans-serif limpia), distinta del
+                resto. Antes era serif (Playfair) y al usuario no le gustaba. */}
             <h2
-              className="font-editorial mt-2"
+              className="mt-2"
               style={{
                 fontSize: "clamp(24px, 3.4vw, 30px)",
                 lineHeight: 1.1,
@@ -192,6 +209,7 @@ export default function RxTemplate({
                 color: tampered ? "#B42318" : "var(--text-primary)",
                 letterSpacing: "-0.02em",
                 wordBreak: "break-word",
+                fontFamily: "var(--font-sans)",
                 ...clampLines(2),
               }}
             >
@@ -227,15 +245,16 @@ export default function RxTemplate({
 
             {!tampered && receta.instrucciones && (
               <div
-                className="mt-4 p-3.5 rounded-xl"
+                className="mt-3 p-2.5 rounded-xl"
                 style={{
-                  background: "rgba(10,132,255,0.05)",
-                  border: "1px solid rgba(10,132,255,0.18)",
+                  background: "rgba(255,255,255,0.86)",
+                  border: "1px solid rgba(10,132,255,0.22)",
+                  backdropFilter: "blur(2px)",
                 }}
               >
-                <div className="label-xs mb-1">Instrucciones</div>
+                <div className="label-xs mb-0.5">Instrucciones</div>
                 <p
-                  className="text-sm text-[color:var(--text-primary)] leading-relaxed"
+                  className="text-[12.5px] text-[color:var(--text-primary)] leading-snug"
                   style={clampLines(2)}
                 >
                   {receta.instrucciones}
@@ -243,7 +262,8 @@ export default function RxTemplate({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4 mt-5">
+            {/* Paciente + emitida en una sola fila compacta. */}
+            <div className="grid grid-cols-2 gap-3 mt-3">
               <Meta
                 icon={User}
                 label="Paciente"
@@ -251,6 +271,14 @@ export default function RxTemplate({
               />
               <Meta icon={Calendar} label="Emitida" value={fechaCorta} />
             </div>
+
+            {/* Próxima dispensación — solo paciente, solo recetas con
+                intervalo de días configurado y aún con dispensaciones
+                disponibles. */}
+            {role === "paciente" && receta.intervalo_dias && receta.dispensaciones_realizadas > 0
+              && receta.dispensaciones_realizadas < receta.dispensaciones_permitidas && (
+              <ProximaDispensacionChip receta={receta} />
+            )}
           </section>
 
           <div className="relative z-10">
@@ -265,30 +293,34 @@ export default function RxTemplate({
               </div>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap justify-end">
-              <button
-                type="button"
-                onClick={() => setQrOpen((v) => !v)}
-                className="btn btn-ghost btn-sm shrink-0"
-                style={qrOpen ? { color: "var(--cyan, #0A84FF)" } : undefined}
-                title="Mostrar código QR"
-              >
-                <QrCode size={12} /> QR
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    await downloadRecetaPdf(receta);
-                  } catch (err) {
-                    console.error(err);
-                    toast.error("No se pudo generar el PDF de la receta");
-                  }
-                }}
-                className="btn btn-ghost btn-sm shrink-0"
-                title="Descargar receta en PDF"
-              >
-                <FileDown size={12} /> PDF
-              </button>
+              {showQR && (
+                <button
+                  type="button"
+                  onClick={() => setQrOpen((v) => !v)}
+                  className="btn btn-ghost btn-sm shrink-0"
+                  style={qrOpen ? { color: "var(--cyan, #0A84FF)" } : undefined}
+                  title="Mostrar código QR"
+                >
+                  <QrCode size={12} /> QR
+                </button>
+              )}
+              {showPDF && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await downloadRecetaPdf(receta);
+                    } catch (err) {
+                      console.error(err);
+                      toast.error("No se pudo generar el PDF de la receta");
+                    }
+                  }}
+                  className="btn btn-ghost btn-sm shrink-0"
+                  title="Descargar receta en PDF"
+                >
+                  <FileDown size={12} /> PDF
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setFlipped(true)}
@@ -299,25 +331,6 @@ export default function RxTemplate({
               </button>
             </div>
           </footer>
-
-          {/* Panel QR — se expande debajo del footer dentro del anverso */}
-          <AnimatePresence>
-            {qrOpen && (
-              <motion.div
-                key="qr-panel"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ type: "spring", stiffness: 280, damping: 28 }}
-                className="relative z-10 overflow-hidden px-5 sm:px-6 pb-5"
-              >
-                <QRReceta
-                  recetaId={receta.id}
-                  medicamento={receta.medicamento}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
 
           <div
             className="absolute pointer-events-none capsule-float z-0"
@@ -348,7 +361,7 @@ export default function RxTemplate({
             <div className="flex-1 min-w-0">
               <div className="label-xs">Sello criptográfico</div>
               <h3
-                className="font-editorial text-xl"
+                className="font-heading text-xl"
                 style={{ fontWeight: 700 }}
               >
                 Receta #{receta.id}
@@ -398,7 +411,99 @@ export default function RxTemplate({
           </footer>
         </article>
       </div>
+
+      {/* QR en modal — sale del card para verse completo sin recortes. */}
+      <Modal
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        title={`Código QR · Receta #${receta.id}`}
+      >
+        <QRReceta recetaId={receta.id} size={240} />
+      </Modal>
     </motion.div>
+  );
+}
+
+// Línea "Label: ____valor____" estilo receta de papel. Usa la fuente del
+// Login (var(--font-heading)) en TODO para que se sienta consistente con el
+// resto de la app.
+function FieldLine({ label, children, small = false, tiny = false }) {
+  const labelSize = tiny ? 11 : small ? 12.5 : 13.5;
+  const valueSize = tiny ? 11.5 : small ? 13 : 14;
+  return (
+    <span
+      className="inline-flex items-baseline gap-2 min-w-0"
+      style={{ fontFamily: "var(--font-heading)" }}
+    >
+      <span
+        style={{
+          color: "#3B4A66",
+          fontSize: labelSize,
+          fontWeight: 600,
+        }}
+      >
+        {label}:
+      </span>
+      <span
+        className="truncate"
+        style={{
+          color: "#0B2443",
+          fontSize: valueSize,
+          fontWeight: 600,
+          borderBottom: "1px solid rgba(10,79,179,0.50)",
+          paddingBottom: 2,
+          minWidth: tiny ? 56 : small ? 96 : 220,
+          display: "inline-block",
+        }}
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
+
+// Chip que dice "Próxima dispensación: en X días" o "Disponible ahora".
+// Calcula en cliente: última fecha + intervalo_dias. Si no hay último
+// timestamp, muestra solo "Cada X días".
+function ProximaDispensacionChip({ receta }) {
+  const ultima = receta.ultima_dispensacion
+    ? new Date(receta.ultima_dispensacion)
+    : null;
+  const dias = receta.intervalo_dias;
+  if (!ultima) {
+    return (
+      <div
+        className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px]"
+        style={{
+          background: "rgba(10,132,255,0.10)",
+          border: "1px solid rgba(10,132,255,0.32)",
+          color: "var(--blue-deep)",
+          fontWeight: 600,
+        }}
+      >
+        <Calendar size={11} /> Cada {dias} día{dias === 1 ? "" : "s"}
+      </div>
+    );
+  }
+  const proxima = new Date(ultima.getTime() + dias * 86400000);
+  const ahora = new Date();
+  const diff = Math.ceil((proxima - ahora) / 86400000);
+  const disponible = diff <= 0;
+  return (
+    <div
+      className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px]"
+      style={{
+        background: disponible ? "rgba(0,109,73,0.18)" : "rgba(224,135,0,0.12)",
+        border: `1px solid ${disponible ? "#004D33" : "rgba(224,135,0,0.45)"}`,
+        color: disponible ? "#004D33" : "#9A6700",
+        fontWeight: 700,
+      }}
+    >
+      <Calendar size={11} />
+      {disponible
+        ? "Próxima dispensación disponible ahora"
+        : `Próxima dispensación en ${diff} día${diff === 1 ? "" : "s"}`}
+    </div>
   );
 }
 

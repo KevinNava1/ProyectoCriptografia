@@ -276,6 +276,40 @@ def buscar_usuarios(
     ]
 
 
+@router.get("/me/certificados")
+def mis_certificados(
+    u: Usuario = Depends(auth_required),
+    db: Session = Depends(get_db),
+):
+    """Devuelve los certificados X.509 del usuario autenticado.
+
+    Los certs son información pública por definición (sólo llave pública + firma
+    de la CA); los entregamos al dueño para que pueda descargarlos y portarlos
+    como prueba criptográfica de su identidad. Incluimos los revocados con su
+    bandera para que pueda ver el ciclo completo.
+    """
+    certs = (
+        db.query(Certificado)
+        .filter(Certificado.usuario_id == u.id)
+        .order_by(Certificado.fecha_emision.desc())
+        .all()
+    )
+    return [
+        {
+            "id": c.id,
+            "tipo": c.tipo,
+            "uso": c.uso,
+            "serial_hex": c.serial_hex,
+            "cert_pem": c.cert_pem,
+            "fecha_emision": c.fecha_emision,
+            "fecha_expiracion": c.fecha_expiracion,
+            "revocado": c.revocado,
+            "motivo_revocacion": c.motivo_revocacion,
+        }
+        for c in certs
+    ]
+
+
 @router.get("/{username}", response_model=UsuarioOutput)
 def obtener_usuario(username: str, db: Session = Depends(get_db)):
     u = db.query(Usuario).filter(Usuario.username == username).first()

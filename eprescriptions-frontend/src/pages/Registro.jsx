@@ -16,6 +16,9 @@ import { DoctorLogo, PatientLogo, PharmacistLogo } from '../components/illustrat
 import PageTransition from '../components/ui/PageTransition'
 import { splitPemBundle } from '../lib/utils'
 import { usuariosAPI } from '../api'
+// Imágenes 3D — una por paso del wizard.
+import imgTeam from '../assets/login/team.png'
+import imgSyringe from '../assets/login/syringe.png'
 
 const ROLES = [
   { id: 'medico',       label: 'Médico',       Logo: DoctorLogo,     desc: 'Firma y emite recetas' },
@@ -130,36 +133,142 @@ correspondientes. Las públicas ya están registradas en el servidor.
     <PageTransition>
       <div className="relative min-h-screen flex items-center justify-center overflow-hidden py-8 sm:py-10 px-4">
         <Suspense fallback={null}>
-          <VideoBackdrop intensity="soft" />
-          <AuroraBackground variant="subtle" />
+          <VideoBackdrop intensity="strong" />
+          {/* AuroraBackground REMOVIDO — pintaba la pantalla de azul. */}
 
-          {/* Vórtice médico 3D detrás del formulario */}
+          {/* Anillos del vortex — mismos que el Login (blancos, grandes). */}
           <div
             className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-            style={{ width: 'min(1100px, 110vw)', height: 'min(900px, 100vh)' }}
+            style={{ width: 'min(1500px, 140vw)', height: 'min(1200px, 110vh)' }}
             aria-hidden
           >
             <MedicalVortex3D />
           </div>
 
-          {/* Escena SVG sin píldoras planas + dos Pill3D reales orbitando */}
+          {/* Escena central — variant=stethoscope (igual que Login). El
+              variant=capsules tenía cápsulas redondas que parecían una
+              "cara feliz" y el usuario las pidió quitar. */}
           <div
             className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-            style={{ width: 'min(860px, 96vw)', height: 'min(860px, 88vh)' }}
+            style={{ width: 'min(1100px, 110vw)', height: 'min(1100px, 96vh)' }}
             aria-hidden
           >
-            <MedicalScene variant="capsules" />
-            <Pill3DOrbit radius={270} duration={22} size={140} />
-            <Pill3DOrbit radius={270} duration={22} size={110} delay={-11} />
+            <MedicalScene variant="stethoscope" />
+            <Pill3DOrbit radius={330} duration={22} size={160} />
+            <Pill3DOrbit radius={330} duration={22} size={130} delay={-11} />
           </div>
         </Suspense>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`relative z-10 w-full ${step === 2 ? 'max-w-4xl' : 'max-w-xl'}`}
+          className={`relative z-10 w-full ${step === 2 ? 'max-w-6xl' : 'max-w-5xl'}`}
         >
-          <div className={`secure-card p-6 sm:p-8 ${shakeCls}`}>
+          <div
+            className={`relative overflow-hidden rounded-3xl ${shakeCls}`}
+            style={{
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(244,250,255,0.82) 100%)',
+              border: '1px solid rgba(10,132,255,0.30)',
+              backdropFilter: 'blur(26px) saturate(1.35)',
+              WebkitBackdropFilter: 'blur(26px) saturate(1.35)',
+              boxShadow: '0 30px 80px rgba(10,36,67,0.22), 0 1px 1px rgba(255,255,255,0.7) inset',
+            }}
+          >
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_1fr] min-h-[560px]">
+            {/* COLUMNA IZQUIERDA — imagen 3D animada por paso */}
+            <motion.div
+              className="relative overflow-hidden hidden lg:flex flex-col items-center justify-center px-7"
+              animate={{
+                background:
+                  step === 2
+                    ? 'linear-gradient(135deg, rgba(10,132,255,0.10) 0%, rgba(0,168,112,0.24) 50%, rgba(10,82,204,0.10) 100%)'
+                    : 'linear-gradient(135deg, rgba(10,132,255,0.10) 0%, rgba(0,168,112,0.08) 50%, rgba(10,82,204,0.10) 100%)',
+              }}
+              transition={{ duration: 0.6 }}
+              style={{ borderRight: '1px solid rgba(10,132,255,0.18)' }}
+            >
+              <div
+                aria-hidden
+                className="absolute pointer-events-none"
+                style={{
+                  top: '-20%', left: '-15%', width: 320, height: 320,
+                  background: 'radial-gradient(circle, rgba(10,132,255,0.30), transparent 65%)',
+                  filter: 'blur(40px)',
+                }}
+              />
+              <motion.div
+                aria-hidden
+                className="absolute pointer-events-none"
+                animate={{
+                  background:
+                    step === 2
+                      ? 'radial-gradient(circle, rgba(0,168,112,0.55), transparent 65%)'
+                      : 'radial-gradient(circle, rgba(0,168,112,0.22), transparent 65%)',
+                }}
+                transition={{ duration: 0.6 }}
+                style={{
+                  bottom: '-20%', right: '-15%', width: 380, height: 380,
+                  filter: 'blur(40px)',
+                }}
+              />
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={step}
+                  initial={{ opacity: 0, scale: 0.85, rotateY: step === 2 ? 90 : -90 }}
+                  animate={{ opacity: 1, scale: 1, rotateY: 0 }}
+                  exit={{ opacity: 0, scale: 0.85, rotateY: step === 2 ? -90 : 90 }}
+                  transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+                  className="relative z-10"
+                  style={{ transformStyle: 'preserve-3d', perspective: 1400 }}
+                >
+                  <motion.img
+                    src={step === 2 ? imgSyringe : imgTeam}
+                    alt=""
+                    draggable={false}
+                    className="select-none pointer-events-none"
+                    style={{
+                      width: 'min(340px, 100%)', height: 'auto',
+                      filter: 'drop-shadow(0 28px 38px rgba(10,36,67,0.28))',
+                    }}
+                    animate={{ y: [0, -12, 0], rotate: [0, 1.5, 0, -1.5, 0] }}
+                    transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+                </motion.div>
+              </AnimatePresence>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`txt-${step}`}
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.45, delay: 0.15 }}
+                  className="relative z-10 mt-5 text-center"
+                >
+                  {step === 1 ? (
+                    <>
+                      <h2 className="font-heading text-2xl" style={{ color: 'var(--blue-deep)', letterSpacing: '-0.02em' }}>
+                        Únete a SecureRx
+                      </h2>
+                      <p className="text-xs mt-2 max-w-xs mx-auto" style={{ color: 'var(--text-secondary)' }}>
+                        Genera tus llaves criptográficas y elige tu rol en el sistema de recetas seguras.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h2 className="font-heading text-2xl" style={{ color: 'var(--blue-deep)', letterSpacing: '-0.02em' }}>
+                        Tus llaves criptográficas
+                      </h2>
+                      <p className="text-xs mt-2 max-w-xs mx-auto" style={{ color: 'var(--text-secondary)' }}>
+                        Descárgalas ahora. Son tu única forma de iniciar sesión.
+                      </p>
+                    </>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </motion.div>
+
+            {/* COLUMNA DERECHA — formulario */}
+            <div className="p-6 sm:p-8 lg:p-9">
             <StepHeader step={step} />
 
             <AnimatePresence mode="wait">
@@ -457,6 +566,8 @@ correspondientes. Las públicas ya están registradas en el servidor.
                 </motion.div>
               )}
             </AnimatePresence>
+            </div>
+          </div>
           </div>
         </motion.div>
       </div>

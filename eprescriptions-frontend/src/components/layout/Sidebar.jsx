@@ -17,6 +17,7 @@ import {
   QrCode,
 } from "lucide-react";
 import { useAuthStore } from "../../store/useAuthStore";
+import roleCardBg from "../../assets/role-card-bg.png";
 
 function linksForRole(role) {
   const base = [
@@ -334,10 +335,21 @@ function UserCard({ expanded }) {
         </div>
       </div>
 
-      {/* Body */}
+      {/* Body — bloque de credencial del usuario. Cuando el sidebar está
+          expandido, lleva el fondo de la "tarjeta" (caduceo + SECURERX).
+          Colapsado: fondo plano blanco para no estorbar al avatar redondo. */}
       <div
-        className="px-3.5 pt-3 pb-2"
-        style={{ background: "var(--color-background-primary, #fff)" }}
+        className="px-3.5 pt-3 pb-2 relative overflow-hidden"
+        style={
+          expanded
+            ? {
+                backgroundImage: `linear-gradient(180deg, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.92) 100%), url(${roleCardBg})`,
+                backgroundSize: 'cover, cover',
+                backgroundPosition: 'center, center',
+                backgroundRepeat: 'no-repeat, no-repeat',
+              }
+            : { background: "var(--color-background-primary, #fff)" }
+        }
       >
         <div className="flex items-center gap-2.5">
           <div

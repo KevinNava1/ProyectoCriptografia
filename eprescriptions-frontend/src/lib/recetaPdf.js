@@ -1,6 +1,38 @@
 import { jsPDF } from 'jspdf'
 import QRCode from 'qrcode'
 import { formatDate } from './utils'
+import prescriptionBgUrl from '../assets/prescription-bg.png'
+
+// Marca de agua: el PNG del caduceo + olas pre-procesado a opacidad 28%
+// con canvas. Pre-procesar la imagen es a prueba de balas — no depende de
+// jsPDF.GState (soporte irregular entre versiones).
+let _bgDataUrl = null
+async function loadBgDataUrl() {
+  if (_bgDataUrl) return _bgDataUrl
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image()
+      i.crossOrigin = 'anonymous'
+      i.onload = () => resolve(i)
+      i.onerror = reject
+      i.src = prescriptionBgUrl
+    })
+    const canvas = document.createElement('canvas')
+    canvas.width = img.naturalWidth
+    canvas.height = img.naturalHeight
+    const ctx = canvas.getContext('2d')
+    // PNG transparente con la imagen al 28% — jsPDF la pinta encima del
+    // fondo blanco del PDF y queda como marca de agua tenue. SIN fillRect
+    // blanco previo (eso bloquea el caduceo) y SIN JPEG (no soporta alpha).
+    ctx.globalAlpha = 0.28
+    ctx.drawImage(img, 0, 0)
+    _bgDataUrl = canvas.toDataURL('image/png')
+  } catch (err) {
+    console.warn('[recetaPdf] No se pudo cargar marca de agua:', err)
+    _bgDataUrl = null
+  }
+  return _bgDataUrl
+}
 
 // PDF estilo LaTeX (clase `article`) — Times como serif (la built-in más
 // cercana a Computer Modern) sin cursivas. Toda la composición es de altura
@@ -37,11 +69,28 @@ function setColor(doc, c, kind = 'text') {
 
 // ───────── primitivas de layout ─────────
 
+// Pinta la marca de agua del recetario (ya pre-aplicada opacity 22% sobre
+// blanco en `loadBgDataUrl`). Llamar al inicio de cada página.
+function drawWatermark(doc, dataUrl) {
+  if (!dataUrl) return
+  // PNG con alpha. Llenamos la página A4 centrando vertical, ancho completo,
+  // preservando la proporción ~0.74 de la imagen original.
+  const imgW = PAGE_W
+  const imgH = PAGE_W / 0.74
+  const offY = (PAGE_H - imgH) / 2
+  try {
+    doc.addImage(dataUrl, 'PNG', 0, offY, imgW, imgH, undefined, 'FAST')
+  } catch (err) {
+    console.warn('[recetaPdf] addImage falló:', err)
+  }
+}
+
 // Paginar si el bloque de altura `needed` no cabe desde y.
 function ensureSpace(doc, y, needed) {
   if (y + needed > PAGE_H - MARGIN_BOTTOM) {
     drawFooter(doc)
     doc.addPage()
+    drawWatermark(doc, doc._securerxBg)
     return MARGIN_TOP
   }
   return y
@@ -530,6 +579,13 @@ function drawFooter(doc) {
 export async function generateRecetaPdf(receta) {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   doc.setFont('times', 'normal')
+
+  // Cargar marca de agua. Si falla, el PDF se genera igual sin background.
+  // Guardamos la dataURL en el propio `doc` para que `ensureSpace` la use
+  // cuando agregue páginas nuevas (sin tener que propagar el arg).
+  const bgDataUrl = await loadBgDataUrl()
+  doc._securerxBg = bgDataUrl
+  drawWatermark(doc, bgDataUrl)
 
   let qrDataUrl = null
   try {

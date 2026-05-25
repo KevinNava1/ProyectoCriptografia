@@ -1,24 +1,33 @@
 import { motion } from 'framer-motion'
-import { ShieldCheck, KeyRound, Fingerprint } from 'lucide-react'
+import { ShieldCheck, KeyRound, Fingerprint, CalendarClock } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 import { cn } from '../../lib/utils'
 
-// Card específica para certificados X.509. Hover suave (translateY -2px +
-// box-shadow), transición 220ms. Diseñada para listas de certs o detalles
-// de solicitud. Convive con SecureCard pero tiene layout fijo y semántica.
+// Card para certificados X.509 — versión compacta. Mostramos solo lo
+// necesario: algoritmo, uso, serial truncado y fecha de vencimiento.
 //
 // Props:
-//   algo        — 'EC' | 'RSA'  → cambia el icono y el chip
-//   fingerprint — string SHA-256 truncado del cert
-//   serial      — número de serie del cert (string)
-//   issuedAt    — Date | string
+//   algo        — 'EC' | 'RSA'
+//   serial      — número de serie (truncamos a primeros/últimos chars)
 //   validUntil  — Date | string
 //   status      — 'active' | 'revoked' | 'expired'
-//   onClick     — opcional
+//   uso         — 'firma' | 'cifrado' (más legible que CN raw)
 
 const ALGO_META = {
-  EC:  { label: 'ECDSA P-256',   tone: 'cyan',    icon: KeyRound },
-  RSA: { label: 'RSA-OAEP 2048', tone: 'emerald', icon: KeyRound },
+  EC: {
+    label: 'ECDSA P-256',
+    tone: '#0A84FF',
+    bg: 'rgba(10,132,255,0.10)',
+    border: 'rgba(10,132,255,0.42)',
+    icon: KeyRound,
+  },
+  RSA: {
+    label: 'RSA-OAEP 2048',
+    tone: '#00A870',
+    bg: 'rgba(0,168,112,0.10)',
+    border: 'rgba(0,168,112,0.42)',
+    icon: KeyRound,
+  },
 }
 const STATUS_META = {
   active:  { tone: 'emerald', label: 'Activo' },
@@ -32,24 +41,30 @@ function fmt(d) {
   catch { return String(d) }
 }
 
+// "5f92913b51e1c4c586bc6a5e9bc5a92bb761fed9" → "5f9291…1fed9"
+function truncSerial(s) {
+  if (!s) return ''
+  if (s.length <= 14) return s
+  return `${s.slice(0, 6)}…${s.slice(-5)}`
+}
+
 export default function CertificateCard({
   algo = 'EC',
-  fingerprint,
   serial,
-  issuedAt,
   validUntil,
   status = 'active',
-  subjectCN,
+  uso,
   className,
   onClick,
 }) {
   const a = ALGO_META[algo] || ALGO_META.EC
   const s = STATUS_META[status] || STATUS_META.active
   const Icon = a.icon
+  const usoLabel = uso === 'cifrado' ? 'Cifrado' : 'Firma'
 
   return (
     <motion.div
-      whileHover={{ y: -2, boxShadow: '0 18px 38px rgba(10,132,255,0.16)' }}
+      whileHover={{ y: -2, boxShadow: `0 18px 38px ${a.tone}26` }}
       transition={{ type: 'spring', stiffness: 280, damping: 22 }}
       onClick={onClick}
       className={cn(
@@ -58,16 +73,15 @@ export default function CertificateCard({
         className,
       )}
     >
-      <div className="flex items-start gap-4">
-        <div
-          className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-          style={{
-            background: a.tone === 'cyan' ? 'rgba(10,132,255,0.10)' : 'rgba(0,168,112,0.10)',
-            border: `1px solid ${a.tone === 'cyan' ? 'rgba(10,132,255,0.32)' : 'rgba(0,168,112,0.32)'}`,
-          }}
+      <div className="flex items-start gap-3.5">
+        <motion.div
+          className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: a.bg, border: `1px solid ${a.border}` }}
+          whileHover={{ rotate: [0, -8, 8, 0] }}
+          transition={{ duration: 0.5 }}
         >
-          <Icon size={18} style={{ color: a.tone === 'cyan' ? 'var(--cyan)' : 'var(--emerald)' }} />
-        </div>
+          <Icon size={20} style={{ color: a.tone }} />
+        </motion.div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -76,25 +90,26 @@ export default function CertificateCard({
               {s.label}
             </StatusBadge>
           </div>
-          {subjectCN && (
-            <div className="text-xs text-[color:var(--text-secondary)] mt-0.5 truncate">
-              CN={subjectCN}
-            </div>
-          )}
 
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
-            {fingerprint && (
-              <Row icon={<Fingerprint size={11} />} label="Fingerprint">
-                <span className="font-mono break-all">{fingerprint}</span>
-              </Row>
-            )}
+          {/* Subtítulo: uso del certificado, claro y sin redundancia. */}
+          <div
+            className="text-[11.5px] font-semibold uppercase tracking-wider mt-1"
+            style={{ color: a.tone, letterSpacing: '0.08em' }}
+          >
+            {usoLabel}
+          </div>
+
+          <div className="mt-3 space-y-1.5 text-[11.5px]">
             {serial && (
-              <Row icon={<ShieldCheck size={11} />} label="Serial">
-                <span className="font-mono">{serial}</span>
+              <Row icon={<Fingerprint size={12} style={{ color: a.tone }} />} title={serial}>
+                <span className="font-mono">{truncSerial(serial)}</span>
               </Row>
             )}
-            {issuedAt && <Row label="Emitido">{fmt(issuedAt)}</Row>}
-            {validUntil && <Row label="Vence">{fmt(validUntil)}</Row>}
+            {validUntil && (
+              <Row icon={<CalendarClock size={12} style={{ color: a.tone }} />}>
+                Vence <strong className="font-mono">{fmt(validUntil)}</strong>
+              </Row>
+            )}
           </div>
         </div>
       </div>
@@ -102,13 +117,11 @@ export default function CertificateCard({
   )
 }
 
-function Row({ icon, label, children }) {
+function Row({ icon, children, title }) {
   return (
-    <div className="flex items-baseline gap-1.5">
-      <span className="label-xs flex items-center gap-1 shrink-0">
-        {icon}{label}
-      </span>
-      <span className="text-[color:var(--text-primary)] truncate">{children}</span>
+    <div className="flex items-center gap-2 text-[color:var(--text-primary)]" title={title}>
+      <span className="shrink-0">{icon}</span>
+      <span className="truncate">{children}</span>
     </div>
   )
 }

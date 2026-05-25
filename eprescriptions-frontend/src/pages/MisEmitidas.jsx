@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import {
-  Stethoscope, FileSignature, RefreshCcw, Filter, X, GitBranch, ShieldOff, Pill,
+  Stethoscope, FileSignature, RefreshCcw, Filter, GitBranch, ShieldOff, Pill,
   User, Calendar, AlertTriangle,
 } from 'lucide-react'
 import PageTransition from '../components/ui/PageTransition'
@@ -16,6 +16,13 @@ import CryptoHash from '../components/ui/CryptoHash'
 import SessionKeyPicker, { validateKeysBundle } from '../components/ui/SessionKeyPicker'
 import TiltCard from '../components/ui/TiltCard'
 import AnimatedCounter from '../components/ui/AnimatedCounter'
+import Pagination from '../components/ui/Pagination'
+import SearchInput from '../components/ui/SearchInput'
+import RxTemplate from '../components/ui/RxTemplate'
+import PageHero from '../components/ui/PageHero'
+import iconHospital from '../assets/icons/hospital.png'
+
+const PAGE_SIZE = 8
 import { listContainer, listItem } from '../lib/animations'
 import { useAuthStore } from '../store/useAuthStore'
 import { recetasAPI } from '../api'
@@ -43,6 +50,8 @@ export default function MisEmitidas() {
   const [version, setVersion] = useState(0)
   const [cancelOf, setCancelOf] = useState(null)
   const [versionOf, setVersionOf] = useState(null)
+  const [query, setQuery] = useState('')
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     if (!user) return
@@ -62,10 +71,29 @@ export default function MisEmitidas() {
     return () => { cancelled = true }
   }, [user, version])
 
-  const visibles = useMemo(() => {
-    if (filtro === 'todas') return recetas
-    return recetas.filter(r => r.estado === filtro)
-  }, [recetas, filtro])
+  const filtradas = useMemo(() => {
+    const base = filtro === 'todas' ? recetas : recetas.filter(r => r.estado === filtro)
+    const q = query.trim().toLowerCase()
+    if (!q) return base
+    return base.filter(r => {
+      const haystack = [
+        r.medicamento, r.dosis, r.estado, r.paciente_username, `#${r.id}`,
+      ].filter(Boolean).join(' ').toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [recetas, filtro, query])
+
+  const totalPages = Math.max(1, Math.ceil(filtradas.length / PAGE_SIZE))
+  // Volvemos a la página 1 al filtrar o buscar — sino podías quedar en una
+  // página vacía si el filtro reduce el total por debajo del cursor.
+  useEffect(() => { setPage(1) }, [filtro, query])
+  const safePage = Math.min(page, totalPages)
+  const visibles = useMemo(
+    () => filtradas.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtradas, safePage],
+  )
+  const rangeFrom = filtradas.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1
+  const rangeTo = Math.min(safePage * PAGE_SIZE, filtradas.length)
 
   const stats = useMemo(() => ({
     total: recetas.length,
@@ -77,20 +105,13 @@ export default function MisEmitidas() {
   return (
     <PageTransition>
       <div className="space-y-6">
-        <header className="flex items-end justify-between flex-wrap gap-4">
-          <div>
-            <div className="label-xs flex items-center gap-1.5">
-              <Stethoscope size={11} className="text-[color:var(--cyan)]" />
-              Médico · @{user?.username}
-            </div>
-            <h1 className="font-heading text-3xl md:text-4xl mt-2 flex items-center gap-3">
-              <FileSignature className="text-[color:var(--cyan)]" /> Mis recetas emitidas
-            </h1>
-            <p className="text-[color:var(--text-secondary)] mt-2 text-sm max-w-xl">
-              Gestiona las recetas que has firmado: cancela las que aún no se completaron o emite
-              una nueva versión cuando necesites ajustar dosis o medicamento.
-            </p>
-          </div>
+        <PageHero
+          eyebrow={`Médico · @${user?.username || ''}`}
+          title="Mis recetas emitidas"
+          subtitle="Cancela las que aún no se completaron o emite una nueva versión."
+          iconImg={iconHospital}
+          accent="#0A84FF"
+        >
           <button
             type="button"
             onClick={() => setVersion(v => v + 1)}
@@ -98,7 +119,7 @@ export default function MisEmitidas() {
           >
             <RefreshCcw size={14}/> Refrescar
           </button>
-        </header>
+        </PageHero>
 
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Kpi label="Total" value={stats.total} accent="#0A84FF" />
@@ -107,54 +128,92 @@ export default function MisEmitidas() {
           <Kpi label="Revocadas" value={stats.revocadas} accent="#B42318" />
         </section>
 
-        <section>
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <Filter size={14} className="text-[color:var(--text-secondary)]" />
-            {FILTROS.map(f => {
-              const active = filtro === f.id
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setFiltro(f.id)}
-                  className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-                  style={{
-                    background: active ? 'rgba(10,132,255,0.10)' : 'var(--bg-tertiary)',
-                    border: `1px solid ${active ? 'rgba(10,132,255,0.55)' : 'var(--border-subtle)'}`,
-                    color: active ? 'var(--blue-deep)' : 'var(--text-secondary)',
-                  }}
-                >
-                  {f.label}
-                </button>
-              )
-            })}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Buscar por medicamento, paciente, estado…"
+            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <Filter size={14} className="text-[color:var(--text-secondary)]" />
+              {FILTROS.map(f => {
+                const active = filtro === f.id
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setFiltro(f.id)}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                    style={{
+                      background: active ? 'rgba(10,132,255,0.10)' : 'var(--bg-tertiary)',
+                      border: `1px solid ${active ? 'rgba(10,132,255,0.55)' : 'var(--border-subtle)'}`,
+                      color: active ? 'var(--blue-deep)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {loading && <LoadingPulse rows={4} />}
           {!loading && error && <EmptyState title="Error" message={error} />}
-          {!loading && !error && visibles.length === 0 && (
+          {!loading && !error && filtradas.length === 0 && (
             <EmptyState
-              title={filtro === 'todas' ? 'Aún no has emitido recetas' : 'No hay recetas con este filtro'}
-              message="Cuando firmes una receta, aparecerá aquí con sus contadores y firmas."
+              title={query ? 'Ninguna coincide' : (filtro === 'todas' ? 'Aún no has emitido recetas' : 'No hay recetas con este filtro')}
+              message={query ? 'Ajusta el filtro o la búsqueda.' : 'Cuando firmes una receta, aparecerá aquí con sus contadores y firmas.'}
             />
           )}
-          {!loading && !error && visibles.length > 0 && (
-            <motion.div
-              variants={listContainer}
-              initial="initial"
-              animate="animate"
-              className="grid gap-3"
-            >
-              {visibles.map((r) => (
-                <motion.div key={r.id} variants={listItem}>
-                  <RecetaCard
-                    receta={r}
-                    onCancel={() => setCancelOf(r)}
-                    onNuevaVersion={() => setVersionOf(r)}
-                  />
-                </motion.div>
-              ))}
-            </motion.div>
+          {!loading && !error && filtradas.length > 0 && (
+            <>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-xs text-[color:var(--text-secondary)] font-mono">
+                  Mostrando <strong className="text-[color:var(--text-primary)]">{rangeFrom}–{rangeTo}</strong> de {filtradas.length} receta{filtradas.length === 1 ? '' : 's'}
+                </span>
+                <span className="text-xs text-[color:var(--text-secondary)] font-mono">
+                  Página {safePage} / {totalPages}
+                </span>
+              </div>
+              <motion.div
+                key={`${filtro}-${query}-${safePage}`}
+                variants={listContainer}
+                initial="initial"
+                animate="animate"
+                className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              >
+                {visibles.map((r) => (
+                  <motion.div key={r.id} variants={listItem} className="flex flex-col gap-2">
+                    <RxTemplate receta={r} role="medico" />
+                    {/* Acciones del médico — Nueva versión / Cancelar.
+                        Solo aplican a recetas activas. */}
+                    {r.estado === 'emitida' && (
+                      <div className="flex gap-2 justify-end">
+                        <motion.button
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
+                          onClick={() => setVersionOf(r)}
+                          className="btn btn-ghost btn-sm"
+                        >
+                          <GitBranch size={13}/> Nueva versión
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
+                          onClick={() => setCancelOf(r)}
+                          className="btn btn-ghost btn-sm"
+                          style={{ color: '#B42318', borderColor: 'rgba(180,35,24,0.30)' }}
+                        >
+                          <ShieldOff size={13}/> Cancelar
+                        </motion.button>
+                      </div>
+                    )}
+                  </motion.div>
+                ))}
+              </motion.div>
+              <Pagination page={safePage} totalPages={totalPages} onChange={setPage} />
+            </>
           )}
         </section>
       </div>

@@ -12,6 +12,12 @@ import ActionFeedback from '../components/ui/ActionFeedback'
 import Spinner from '../components/ui/Spinner'
 import TiltCard from '../components/ui/TiltCard'
 import AnimatedCounter from '../components/ui/AnimatedCounter'
+import Pagination from '../components/ui/Pagination'
+import SearchInput from '../components/ui/SearchInput'
+import PageHero from '../components/ui/PageHero'
+import iconShieldCheck from '../assets/icons/shield-check.png'
+
+const ADMIN_PAGE_SIZE = 8
 import { listContainer, listItem } from '../lib/animations'
 import { adminAPI } from '../api'
 import { formatDate } from '../lib/utils'
@@ -44,6 +50,8 @@ export default function AdminSolicitudes() {
   const [bulkOpen, setBulkOpen] = useState(false)      // confirmar masivo
   const [bulk, setBulk] = useState(null)               // { total, done, ok, fail, currentName }
   const [feedback, setFeedback] = useState(null)        // { mode: 'success'|'error', label }
+  const [query, setQuery] = useState('')
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     let cancelled = false
@@ -68,6 +76,28 @@ export default function AdminSolicitudes() {
     const pend = solicitudes.filter(s => s.estado === 'pendiente').length
     return { total, pend }
   }, [solicitudes])
+
+  // Búsqueda + paginación dentro del estado actual ya filtrado por backend.
+  const filtradas = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return solicitudes
+    return solicitudes.filter(s => {
+      const haystack = [
+        s.username, s.nombre, s.email, ROL_LABEL[s.rol], s.estado, `#${s.id}`,
+      ].filter(Boolean).join(' ').toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [solicitudes, query])
+
+  const totalPages = Math.max(1, Math.ceil(filtradas.length / ADMIN_PAGE_SIZE))
+  useEffect(() => { setPage(1) }, [query, estado])
+  const safePage = Math.min(page, totalPages)
+  const pageItems = useMemo(
+    () => filtradas.slice((safePage - 1) * ADMIN_PAGE_SIZE, safePage * ADMIN_PAGE_SIZE),
+    [filtradas, safePage],
+  )
+  const rangeFrom = filtradas.length === 0 ? 0 : (safePage - 1) * ADMIN_PAGE_SIZE + 1
+  const rangeTo = Math.min(safePage * ADMIN_PAGE_SIZE, filtradas.length)
 
   const aprobar = async (s) => {
     setWorking(s.id)
@@ -150,46 +180,39 @@ export default function AdminSolicitudes() {
   return (
     <PageTransition>
       <div className="space-y-6">
-        <header className="flex items-end justify-between flex-wrap gap-4">
-          <div>
-            <div className="label-xs flex items-center gap-1.5">
-              <ShieldCheck size={11} className="text-[color:var(--emerald)]" />
-              Panel administrativo
-            </div>
-            <h1 className="font-heading text-3xl md:text-4xl mt-2">Solicitudes de certificación</h1>
-            <p className="text-[color:var(--text-secondary)] mt-2 text-sm max-w-xl">
-              Aprueba o rechaza el alta de cada usuario. Al aprobar, se emiten los dos certificados X.509
-              (ECDSA P-256 para firma · RSA-OAEP 2048 para cifrado) y se activa la cuenta.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {stats.pend > 0 && (
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => setBulkOpen(true)}
-                className="btn btn-primary btn-sm relative overflow-hidden"
-              >
-                <CheckCheck size={14}/>
-                Aprobar todas
-                <span
-                  className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
-                  style={{ background: 'rgba(255,255,255,0.22)', color: '#FFFFFF' }}
-                >
-                  {stats.pend}
-                </span>
-              </motion.button>
-            )}
-            <button
+        <PageHero
+          eyebrow="Panel administrativo"
+          title="Solicitudes de certificación"
+          subtitle="Aprueba el alta para emitir los dos certificados X.509 (ECDSA + RSA)."
+          iconImg={iconShieldCheck}
+          accent="#0A84FF"
+        >
+          {stats.pend > 0 && (
+            <motion.button
               type="button"
-              onClick={() => setVersion(v => v + 1)}
-              className="btn btn-ghost btn-sm"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setBulkOpen(true)}
+              className="btn btn-primary btn-sm relative overflow-hidden"
             >
-              <RefreshCcw size={14}/> Refrescar
-            </button>
-          </div>
-        </header>
+              <CheckCheck size={14}/>
+              Aprobar todas
+              <span
+                className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+                style={{ background: 'rgba(255,255,255,0.22)', color: '#FFFFFF' }}
+              >
+                {stats.pend}
+              </span>
+            </motion.button>
+          )}
+          <button
+            type="button"
+            onClick={() => setVersion(v => v + 1)}
+            className="btn btn-ghost btn-sm"
+          >
+            <RefreshCcw size={14}/> Refrescar
+          </button>
+        </PageHero>
 
         <section className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <Kpi label="En vista" value={stats.total} accent="#0A84FF" icon={FileText} />
@@ -206,47 +229,66 @@ export default function AdminSolicitudes() {
           </SecureCard>
         </section>
 
-        <section>
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <Filter size={14} className="text-[color:var(--text-secondary)]" />
-            {FILTROS.map(f => {
-              const active = estado === f.id
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setEstado(f.id)}
-                  className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-                  style={{
-                    background: active ? 'rgba(10,132,255,0.10)' : 'var(--bg-tertiary)',
-                    border: `1px solid ${active ? 'rgba(10,132,255,0.55)' : 'var(--border-subtle)'}`,
-                    color: active ? 'var(--blue-deep)' : 'var(--text-secondary)',
-                  }}
-                >
-                  {f.label}
-                </button>
-              )
-            })}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Buscar por nombre, username, email, rol…"
+            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <Filter size={14} className="text-[color:var(--text-secondary)]" />
+              {FILTROS.map(f => {
+                const active = estado === f.id
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setEstado(f.id)}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                    style={{
+                      background: active ? 'rgba(10,132,255,0.10)' : 'var(--bg-tertiary)',
+                      border: `1px solid ${active ? 'rgba(10,132,255,0.55)' : 'var(--border-subtle)'}`,
+                      color: active ? 'var(--blue-deep)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {loading && <LoadingPulse rows={4} />}
           {!loading && error && <EmptyState title="Error" message={error} />}
-          {!loading && !error && solicitudes.length === 0 && (
+          {!loading && !error && filtradas.length === 0 && (
             <EmptyState
-              title="Sin solicitudes"
-              message={estado === 'pendiente'
-                ? 'No hay solicitudes pendientes ahora mismo.'
-                : 'No hay solicitudes para este filtro.'}
+              title={query ? 'Ninguna coincide' : 'Sin solicitudes'}
+              message={query
+                ? 'Ajusta el filtro o el texto de búsqueda.'
+                : estado === 'pendiente'
+                  ? 'No hay solicitudes pendientes ahora mismo.'
+                  : 'No hay solicitudes para este filtro.'}
             />
           )}
-          {!loading && !error && solicitudes.length > 0 && (
-            <motion.div
-              variants={listContainer}
-              initial="initial"
-              animate="animate"
-              className="grid gap-3"
-            >
-              {solicitudes.map((s) => (
+          {!loading && !error && filtradas.length > 0 && (
+            <>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-xs text-[color:var(--text-secondary)] font-mono">
+                  Mostrando <strong className="text-[color:var(--text-primary)]">{rangeFrom}–{rangeTo}</strong> de {filtradas.length} solicitud{filtradas.length === 1 ? '' : 'es'}
+                </span>
+                <span className="text-xs text-[color:var(--text-secondary)] font-mono">
+                  Página {safePage} / {totalPages}
+                </span>
+              </div>
+              <motion.div
+                key={`solicitudes-${estado}-${query}-${safePage}`}
+                variants={listContainer}
+                initial="initial"
+                animate="animate"
+                className="grid gap-3"
+              >
+                {pageItems.map((s) => (
                 <motion.div
                   key={s.id}
                   variants={listItem}
@@ -359,7 +401,9 @@ export default function AdminSolicitudes() {
                   </SecureCard>
                 </motion.div>
               ))}
-            </motion.div>
+              </motion.div>
+              <Pagination page={safePage} totalPages={totalPages} onChange={setPage} />
+            </>
           )}
         </section>
       </div>

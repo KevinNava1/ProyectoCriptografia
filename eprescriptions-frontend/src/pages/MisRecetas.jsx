@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Filter, Pill, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Filter, Pill } from 'lucide-react'
 import PageTransition from '../components/ui/PageTransition'
 import RxTemplate from '../components/ui/RxTemplate'
 import LoadingPulse from '../components/ui/LoadingPulse'
 import EmptyState from '../components/ui/EmptyState'
+import Pagination from '../components/ui/Pagination'
+import SearchInput from '../components/ui/SearchInput'
+import PageHero from '../components/ui/PageHero'
+import iconPillBottle from '../assets/icons/pill-bottle.png'
 import { listContainer, listItem } from '../lib/animations'
 import { useAuthStore } from '../store/useAuthStore'
 import { recetasAPI } from '../api'
@@ -20,58 +24,6 @@ const FILTERS = [
 // el corte de paginación — no fija el nº de columnas.
 const PAGE_SIZE = 10
 
-// Ventana de páginas a pintar: 1 … (n-1) n (n+1) … last. Para miles de
-// recetas no tiene sentido listar 80 botones.
-function pageWindow(current, total) {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-  const out = [1]
-  if (current > 4) out.push('…')
-  for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) out.push(i)
-  if (current < total - 3) out.push('…')
-  out.push(total)
-  return out
-}
-
-function PageBtn({ children, active, disabled, onClick, label }) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      aria-label={label}
-      aria-current={active ? 'page' : undefined}
-      className="min-w-[38px] h-9 px-2.5 rounded-lg text-sm font-semibold inline-flex items-center justify-center gap-1 transition-all disabled:opacity-35 disabled:cursor-not-allowed"
-      style={
-        active
-          ? { background: 'linear-gradient(135deg,#0A84FF,#0052CC)', color: '#fff', boxShadow: '0 4px 14px rgba(10,132,255,0.32)' }
-          : { background: 'rgba(255,255,255,0.72)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }
-      }
-    >
-      {children}
-    </button>
-  )
-}
-
-function Pagination({ page, totalPages, onChange }) {
-  if (totalPages <= 1) return null
-  return (
-    <div className="flex items-center justify-center gap-1.5 flex-wrap pt-2">
-      <PageBtn disabled={page === 1} onClick={() => onChange(page - 1)} label="Página anterior">
-        <ChevronLeft size={15} />
-        <span className="hidden sm:inline">Anterior</span>
-      </PageBtn>
-      {pageWindow(page, totalPages).map((p, i) =>
-        p === '…'
-          ? <span key={`gap-${i}`} className="px-1 text-[color:var(--text-secondary)] select-none">…</span>
-          : <PageBtn key={p} active={p === page} onClick={() => onChange(p)} label={`Página ${p}`}>{p}</PageBtn>
-      )}
-      <PageBtn disabled={page === totalPages} onClick={() => onChange(page + 1)} label="Página siguiente">
-        <span className="hidden sm:inline">Siguiente</span>
-        <ChevronRight size={15} />
-      </PageBtn>
-    </div>
-  )
-}
 
 export default function MisRecetas() {
   const user = useAuthStore(s => s.user)
@@ -146,44 +98,21 @@ export default function MisRecetas() {
   return (
     <PageTransition>
       <div className="space-y-6">
-        <header className="flex items-end justify-between flex-wrap gap-4">
-          <div>
-            <div className="label-xs">Paciente</div>
-            <h1 className="font-heading text-3xl md:text-4xl mt-2 flex items-center gap-3">
-              <Pill className="text-[color:var(--cyan)]" /> Mis recetas
-            </h1>
-            <p className="text-[color:var(--text-secondary)] text-sm mt-2 max-w-xl">
-              Toca "Ver firma" en cada receta para mostrar la huella SHA3-256 y la firma ECDSA P-256 + SHA3-256 del médico.
-            </p>
-          </div>
-        </header>
+        <PageHero
+          eyebrow="Paciente"
+          title="Mis recetas"
+          subtitle="Voltea cada tarjeta para ver la firma cripto del médico."
+          iconImg={iconPillBottle}
+          accent="#0A84FF"
+        />
 
         {/* Toolbar — buscador + filtros por estado */}
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[220px] max-w-md">
-            <Search
-              size={15}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--text-secondary)] pointer-events-none"
-            />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por medicamento, médico, estado…"
-              className="input-field"
-              style={{ paddingLeft: '2.3rem', paddingRight: query ? '2.3rem' : '0.95rem' }}
-            />
-            {query && (
-              <button
-                type="button"
-                onClick={() => setQuery('')}
-                aria-label="Limpiar búsqueda"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)] transition-colors"
-              >
-                <X size={15} />
-              </button>
-            )}
-          </div>
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Buscar por medicamento, médico, estado…"
+          />
 
           <div className="flex items-center gap-1 glass rounded-xl p-1 self-start sm:self-auto">
             <Filter size={14} className="text-[color:var(--text-secondary)] ml-2" />

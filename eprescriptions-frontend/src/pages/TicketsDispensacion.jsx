@@ -21,11 +21,18 @@ import StatusChip from "../components/ui/StatusChip";
 import LoadingPulse from "../components/ui/LoadingPulse";
 import EmptyState from "../components/ui/EmptyState";
 import Modal from "../components/ui/Modal";
+import Pagination from "../components/ui/Pagination";
+import SearchInput from "../components/ui/SearchInput";
+import PageHero from "../components/ui/PageHero";
+import iconShieldCheck from "../assets/icons/shield-check.png";
+
+const RECETAS_PAGE_SIZE = 6;
 import SessionKeyPicker, {
   validateKeysBundle,
 } from "../components/ui/SessionKeyPicker";
 import Spinner from "../components/ui/Spinner";
 import DispensationTicket from "../components/ui/DispensationTicket";
+import RxTemplate from "../components/ui/RxTemplate";
 import { listContainer, listItem } from "../lib/animations";
 import { useAuthStore } from "../store/useAuthStore";
 import { dispensacionTicketsAPI, recetasAPI } from "../api";
@@ -142,24 +149,15 @@ export default function TicketsDispensacion() {
   return (
     <PageTransition>
       <div className="space-y-6">
-        <header className="flex items-end justify-between flex-wrap gap-4">
-          <div>
-            <div className="label-xs flex items-center gap-1.5">
-              <Stamp size={11} className="text-[color:var(--cyan)]" />
-              {role === "paciente"
-                ? "Paciente"
-                : role === "medico"
-                  ? "Médico"
-                  : "Farmacéutico"}{" "}
-              · @{user?.username}
-            </div>
-            <h1 className="font-heading text-3xl md:text-4xl mt-2 flex items-center gap-3">
-              <Stamp className="text-[color:var(--cyan)]" /> {headerTitle}
-            </h1>
-            <p className="text-[color:var(--text-secondary)] mt-2 text-sm max-w-2xl">
-              {headerSubtitle}
-            </p>
-          </div>
+        <PageHero
+          eyebrow={`${
+            role === "paciente" ? "Paciente" : role === "medico" ? "Médico" : "Farmacéutico"
+          } · @${user?.username || ""}`}
+          title={headerTitle}
+          subtitle={headerSubtitle}
+          iconImg={iconShieldCheck}
+          accent="#00A870"
+        >
           <button
             type="button"
             onClick={() => setVersion((v) => v + 1)}
@@ -167,7 +165,7 @@ export default function TicketsDispensacion() {
           >
             <RefreshCcw size={14} /> Refrescar
           </button>
-        </header>
+        </PageHero>
 
         {!selected && (
           <section className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -277,6 +275,30 @@ function RecetasGrid({
   role,
   onPick,
 }) {
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+
+  const filtradas = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return recetas;
+    return recetas.filter((r) => {
+      const haystack = [
+        r.medicamento, r.estado, r.medico_username, r.paciente_username, `#${r.id}`,
+      ].filter(Boolean).join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [recetas, query]);
+
+  const totalPages = Math.max(1, Math.ceil(filtradas.length / RECETAS_PAGE_SIZE));
+  useEffect(() => { setPage(1); }, [query]);
+  const safePage = Math.min(page, totalPages);
+  const pageItems = useMemo(
+    () => filtradas.slice((safePage - 1) * RECETAS_PAGE_SIZE, safePage * RECETAS_PAGE_SIZE),
+    [filtradas, safePage],
+  );
+  const rangeFrom = filtradas.length === 0 ? 0 : (safePage - 1) * RECETAS_PAGE_SIZE + 1;
+  const rangeTo = Math.min(safePage * RECETAS_PAGE_SIZE, filtradas.length);
+
   if (loading) return <LoadingPulse rows={3} />;
   if (error) return <EmptyState title="Error" message={error} />;
   if (recetas.length === 0) {
@@ -300,14 +322,40 @@ function RecetasGrid({
     );
   }
   return (
-    <motion.section
-      variants={listContainer}
-      initial="initial"
-      animate="animate"
-      className="grid gap-3"
-    >
-      <div className="label-xs">Selecciona una receta</div>
-      {recetas.map((r) => {
+    <section className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="label-xs">Selecciona una receta</div>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Buscar receta por medicamento, médico, paciente, #id…"
+          maxWidthClass="max-w-md"
+        />
+      </div>
+
+      {filtradas.length === 0 ? (
+        <EmptyState
+          title="Ninguna coincide"
+          message="Ajusta el texto de búsqueda para encontrar recetas."
+        />
+      ) : (
+        <>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-xs text-[color:var(--text-secondary)] font-mono">
+              Mostrando <strong className="text-[color:var(--text-primary)]">{rangeFrom}–{rangeTo}</strong> de {filtradas.length}
+            </span>
+            <span className="text-xs text-[color:var(--text-secondary)] font-mono">
+              Página {safePage} / {totalPages}
+            </span>
+          </div>
+          <motion.div
+            key={`recetas-${query}-${safePage}`}
+            variants={listContainer}
+            initial="initial"
+            animate="animate"
+            className="grid gap-3"
+          >
+            {pageItems.map((r) => {
         const pendCount = role === "paciente" ? pendingByReceta[r.id] || 0 : 0;
         const realizadas = r.dispensaciones_realizadas ?? 0;
         const permitidas = r.dispensaciones_permitidas ?? 0;
@@ -396,7 +444,11 @@ function RecetasGrid({
           </motion.button>
         );
       })}
-    </motion.section>
+          </motion.div>
+          <Pagination page={safePage} totalPages={totalPages} onChange={setPage} />
+        </>
+      )}
+    </section>
   );
 }
 
@@ -411,10 +463,28 @@ function DispensacionesList({
   onDetail,
   onBack,
 }) {
+  // Paginador UNIFICADO:
+  //   página 1         → la RECETA (RxTemplate)
+  //   páginas 2..N+1   → cada dispensación (DispensationTicket)
+  // Total = 1 + eventos.length. La receta NO se duplica arriba; aparece
+  // sola en su propia página y las dispensaciones también una por página.
+  const [page, setPage] = useState(1);
+  const totalPages = 1 + eventos.length;
+  useEffect(() => { setPage(1); }, [receta?.id]);
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const isRecetaPage = safePage === 1;
+  const ev = isRecetaPage ? null : eventos[safePage - 2];
+
+  const labelHeader = isRecetaPage
+    ? "Receta"
+    : `Dispensación #${ev?.numero_dispensacion ?? safePage - 1} de ${eventos.length}`;
+
   return (
-    <section className="space-y-3">
+    <section className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="label-xs">Dispensaciones de la receta #{receta.id}</div>
+        <div className="label-xs">
+          Receta #{receta.id} · {eventos.length} dispensación{eventos.length === 1 ? "" : "es"}
+        </div>
         <button type="button" onClick={onBack} className="btn btn-ghost btn-sm">
           <ArrowLeft size={13} /> Volver a recetas
         </button>
@@ -422,26 +492,36 @@ function DispensacionesList({
 
       {loading && <LoadingPulse rows={2} />}
       {!loading && error && <EmptyState title="Error" message={error} />}
-      {!loading && !error && eventos.length === 0 && (
-        <EmptyState
-          title="Aún no hay dispensaciones"
-          message={
-            role === "farmaceutico"
-              ? "Cuando dispenses esta receta, aparecerá aquí."
-              : "Esta receta todavía no ha sido dispensada."
-          }
-        />
-      )}
 
-      {!loading && !error && eventos.length > 0 && (
-        <motion.div
-          variants={listContainer}
-          initial="initial"
-          animate="animate"
-          className="space-y-3"
-        >
-          {eventos.map((ev) => (
-            <motion.div key={ev.id} variants={listItem}>
+      {!loading && !error && (
+        <>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-xs text-[color:var(--text-secondary)] font-mono">
+              Mostrando <strong className="text-[color:var(--text-primary)]">{labelHeader}</strong>
+            </span>
+            <span className="text-xs text-[color:var(--text-secondary)] font-mono">
+              Página {safePage} / {totalPages}
+            </span>
+          </div>
+
+          <motion.div
+            key={`page-${receta.id}-${safePage}`}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {isRecetaPage ? (
+              <RxTemplate receta={receta} role={role} />
+            ) : eventos.length === 0 ? (
+              <EmptyState
+                title="Aún no hay dispensaciones"
+                message={
+                  role === "farmaceutico"
+                    ? "Cuando dispenses esta receta, aparecerá aquí."
+                    : "Esta receta todavía no ha sido dispensada."
+                }
+              />
+            ) : ev ? (
               <DispensationTicket
                 ev={ev}
                 receta={receta}
@@ -450,9 +530,11 @@ function DispensacionesList({
                 onSign={onSign}
                 onDetail={onDetail}
               />
-            </motion.div>
-          ))}
-        </motion.div>
+            ) : null}
+          </motion.div>
+
+          <Pagination page={safePage} totalPages={totalPages} onChange={setPage} />
+        </>
       )}
     </section>
   );

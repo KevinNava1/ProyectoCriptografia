@@ -29,8 +29,8 @@ function SceneDefs() {
         <stop offset="100%" stopColor="#E6F0FB" />
       </linearGradient>
       <radialGradient id="ms-glow" cx="0.5" cy="0.5" r="0.6">
-        <stop offset="0%"  stopColor="rgba(10,132,255,0.35)" />
-        <stop offset="100%" stopColor="rgba(10,132,255,0)" />
+        <stop offset="0%"  stopColor="rgba(255,255,255,0.28)" />
+        <stop offset="100%" stopColor="rgba(255,255,255,0)" />
       </radialGradient>
       <radialGradient id="ms-shine" cx="0.3" cy="0.2" r="0.7">
         <stop offset="0%"  stopColor="rgba(255,255,255,0.6)" />
@@ -51,23 +51,24 @@ function Stethoscope({ className }) {
         {/* ambient glow */}
         <circle cx="300" cy="300" r="260" fill="url(#ms-glow)" />
 
-        {/* orbit rings */}
-        <g stroke="rgba(10,132,255,0.20)" fill="none">
-          <circle cx="300" cy="300" r="190" strokeWidth="1.2" strokeDasharray="4 8" className="spin-slow" />
-          <circle cx="300" cy="300" r="250" strokeWidth="1"   strokeDasharray="2 10" className="spin-mid"  />
-          <circle cx="300" cy="300" r="120" strokeWidth="0.8" strokeDasharray="3 6"  className="spin-slow" />
+        {/* orbit rings — BLANCOS, opacidad y grosor altos para que se vean
+            sobre el video oscuro del fondo del login. */}
+        <g stroke="rgba(255,255,255,0.85)" fill="none">
+          <circle cx="300" cy="300" r="190" strokeWidth="2.4" strokeDasharray="4 8" className="spin-slow" />
+          <circle cx="300" cy="300" r="250" strokeWidth="2"   strokeDasharray="2 10" className="spin-mid"  />
+          <circle cx="300" cy="300" r="120" strokeWidth="1.8" strokeDasharray="3 6"  className="spin-slow" />
         </g>
 
         {/* Sin chips SVG — las píldoras 3D orbitando se renderizan aparte en el Login */}
 
-        {/* floating sparkles (se expanden por el fondo) */}
-        <g className="float-mid">
-          <circle cx="90"  cy="130" r="4" fill="#0A84FF" />
-          <circle cx="500" cy="150" r="3" fill="#00B8D9" />
-          <circle cx="540" cy="420" r="4" fill="#0052CC" />
-          <circle cx="60"  cy="400" r="3" fill="#0A84FF" />
-          <circle cx="150" cy="500" r="2.5" fill="#00B8D9" />
-          <circle cx="450" cy="520" r="3" fill="#0A84FF" />
+        {/* floating sparkles — BLANCAS para no pintar el fondo de azul. */}
+        <g className="float-mid" opacity="0.9">
+          <circle cx="90"  cy="130" r="4" fill="#FFFFFF" />
+          <circle cx="500" cy="150" r="3" fill="#FFFFFF" />
+          <circle cx="540" cy="420" r="4" fill="#FFFFFF" />
+          <circle cx="60"  cy="400" r="3" fill="#FFFFFF" />
+          <circle cx="150" cy="500" r="2.5" fill="#FFFFFF" />
+          <circle cx="450" cy="520" r="3" fill="#FFFFFF" />
         </g>
       </svg>
     </div>

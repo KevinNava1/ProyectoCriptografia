@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1640" />
+<title>SecureRx · Cryptographic Architecture</title>
+<style>
+  :root{
+    /* Paleta SecureRx — solo azules, teal y emerald (sin amber/red) */
+    --bg:#EEF4FB;
+    --panel:#FFFFFF;
+    --ink:#0B2443;
+    --ink2:#5B6B7B;
+    --line:#cdd9e6;
+
+    --cyan:#0A84FF;
+    --blue-deep:#0052CC;
+    --teal:#00B8D9;
+    --teal-deep:#006B7D;
+    --emerald:#00A870;
+    --emerald-deep:#007049;
+
+    --shadow:0 1px 2px rgba(11,36,67,.06), 0 4px 12px rgba(11,36,67,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+    font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+
+  .wrap{max-width:1680px;margin:0 auto;padding:24px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);padding:18px}
+  .svgwrap{overflow-x:auto}
+  svg{display:block;margin:0 auto;font-family:inherit;max-width:100%;height:auto}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="panel">
+    <div class="svgwrap">
+<svg viewBox="0 0 1620 720" width="1620" height="720" role="img" aria-label="SecureRx cryptographic architecture">
+  <defs>
+    <!-- arrow markers -->
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0B2443"/>
+    </marker>
+    <marker id="ahT" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#00B8D9"/>
+    </marker>
+    <marker id="ahB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0052CC"/>
+    </marker>
+    <marker id="ahE" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#00A870"/>
+    </marker>
+
+    <!-- chevron gradients (todos en azul / teal / emerald) -->
+    <linearGradient id="gC1" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#0A84FF"/><stop offset="100%" stop-color="#0052CC"/></linearGradient>
+    <linearGradient id="gC2" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#00B8D9"/><stop offset="100%" stop-color="#0052CC"/></linearGradient>
+    <linearGradient id="gC3" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#0052CC"/><stop offset="100%" stop-color="#0B2443"/></linearGradient>
+    <linearGradient id="gC4" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#00A870"/><stop offset="100%" stop-color="#007049"/></linearGradient>
+    <linearGradient id="gC5" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#0A84FF"/><stop offset="100%" stop-color="#0B2443"/></linearGradient>
+    <linearGradient id="gC6" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#1f3d6b"/><stop offset="100%" stop-color="#0B2443"/></linearGradient>
+
+    <linearGradient id="gNginx" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#EAF7F9"/><stop offset="100%" stop-color="#D5F0F4"/></linearGradient>
+    <linearGradient id="gCyl"     x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0A84FF"/><stop offset="100%" stop-color="#0052CC"/></linearGradient>
+    <linearGradient id="gCylDark" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0052CC"/><stop offset="100%" stop-color="#0B2443"/></linearGradient>
+
+    <filter id="soft" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.4" flood-color="#0B2443" flood-opacity="0.10"/>
+    </filter>
+    <filter id="chevShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.6" flood-color="#0B2443" flood-opacity="0.20"/>
+    </filter>
+
+    <!-- icons -->
+    <symbol id="key" viewBox="0 0 24 24">
+      <path d="M14 2a6 6 0 0 0-5.92 7L2 15.08V20h4.92l1-1v-2h2v-2h2l2.08-2.08A6 6 0 1 0 14 2zm3 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" fill="#fff"/>
+    </symbol>
+    <symbol id="lock" viewBox="0 0 24 24">
+      <path d="M12 1a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5zm-3 8V6a3 3 0 0 1 6 0v3H9z" fill="#fff"/>
+    </symbol>
+    <symbol id="sig" viewBox="0 0 24 24">
+      <path d="M3 17l3-3 3 3 6-6 3 3v6H3v-3zm0-12h18v8l-3-3-6 6-3-3-6 6V5z" fill="#fff"/>
+    </symbol>
+    <symbol id="aead" viewBox="0 0 24 24">
+      <rect x="5" y="5" width="14" height="14" rx="2" fill="#fff"/>
+      <rect x="8" y="8" width="8" height="8" rx="1" fill="#00A870"/>
+      <line x1="5" y1="8" x2="3" y2="8" stroke="#fff" stroke-width="1.4"/>
+      <line x1="5" y1="12" x2="3" y2="12" stroke="#fff" stroke-width="1.4"/>
+      <line x1="5" y1="16" x2="3" y2="16" stroke="#fff" stroke-width="1.4"/>
+      <line x1="19" y1="8" x2="21" y2="8" stroke="#fff" stroke-width="1.4"/>
+      <line x1="19" y1="12" x2="21" y2="12" stroke="#fff" stroke-width="1.4"/>
+      <line x1="19" y1="16" x2="21" y2="16" stroke="#fff" stroke-width="1.4"/>
+    </symbol>
+    <symbol id="shield" viewBox="0 0 24 24">
+      <path d="M12 2 4 5v7c0 4.5 3.4 8.7 8 10 4.6-1.3 8-5.5 8-10V5l-8-3z" fill="#fff"/>
+      <path d="M9 12l2.2 2.2L15 10.4" stroke="#00B8D9" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="cert" viewBox="0 0 24 24">
+      <rect x="3" y="4" width="18" height="13" rx="1.5" fill="#fff"/>
+      <line x1="5" y1="8" x2="14" y2="8" stroke="#0052CC" stroke-width="1.4"/>
+      <line x1="5" y1="11" x2="11" y2="11" stroke="#0052CC" stroke-width="1"/>
+      <circle cx="17" cy="11" r="2.5" fill="none" stroke="#0052CC" stroke-width="1.4"/>
+      <path d="M15.5 13l-.8 4 2.3-1 2.3 1-.8-4" fill="#fff" stroke="#0052CC" stroke-width="1.2" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="token" viewBox="0 0 24 24">
+      <rect x="3" y="7" width="18" height="10" rx="2" fill="#fff"/>
+      <circle cx="7" cy="12" r="1.6" fill="#00B8D9"/>
+      <line x1="11" y1="10" x2="18" y2="10" stroke="#00B8D9" stroke-width=".9"/>
+      <line x1="11" y1="12" x2="18" y2="12" stroke="#00B8D9" stroke-width=".9"/>
+      <line x1="11" y1="14" x2="16" y2="14" stroke="#00B8D9" stroke-width=".9"/>
+    </symbol>
+    <symbol id="envelope" viewBox="0 0 24 24">
+      <rect x="3" y="6" width="18" height="13" rx="1.5" fill="#fff"/>
+      <path d="M3 7l9 6 9-6" stroke="#006B7D" stroke-width="1.6" fill="none"/>
+    </symbol>
+    <symbol id="finger" viewBox="0 0 24 24">
+      <path d="M12 2C7 2 3 6 3 11M12 6c-3 0-6 3-6 6M12 10c-2 0-4 2-4 4M16 6c2 1.4 3 3.4 3 5.5 0 4-1 7-3 9M20 9c0 5-2 9.5-5 12" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="db" viewBox="0 0 24 24">
+      <ellipse cx="12" cy="5" rx="8" ry="2.5" fill="#fff"/>
+      <path d="M4 5v14c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5V5" fill="#fff" stroke="#0B2443" stroke-width=".8"/>
+      <ellipse cx="12" cy="11" rx="8" ry="2.2" fill="none" stroke="#0052CC" stroke-width=".9"/>
+      <ellipse cx="12" cy="16" rx="8" ry="2.2" fill="none" stroke="#0052CC" stroke-width=".9"/>
+    </symbol>
+    <symbol id="browser" viewBox="0 0 64 64">
+      <rect x="3" y="7" width="58" height="50" rx="5" fill="#fff" stroke="#0052CC" stroke-width="2"/>
+      <rect x="3" y="7" width="58" height="13" rx="5" fill="#0052CC"/>
+      <circle cx="11"   cy="13.5" r="1.7" fill="#7FDBA2"/>
+      <circle cx="17.5" cy="13.5" r="1.7" fill="#00B8D9"/>
+      <circle cx="24"   cy="13.5" r="1.7" fill="#0A84FF"/>
+      <rect x="10" y="28" width="44" height="4.4" rx="2" fill="#bcd6f5"/>
+      <rect x="10" y="36" width="32" height="4.4" rx="2" fill="#bcd6f5"/>
+      <rect x="10" y="44" width="38" height="4.4" rx="2" fill="#bcd6f5"/>
+    </symbol>
+  </defs>
+
+  <style>
+    .ttl    { font-size:11px;   font-weight:700; letter-spacing:1.2px; fill:#5B6B7B; }
+    .lane   { font-size:12px;   font-weight:800; letter-spacing:1.4px; }
+    .head   { font-size:11px;   font-weight:700; fill:#ffffff; letter-spacing:.6px; }
+    .main   { font-size:13.5px; font-weight:700; fill:#0B2443; }
+    .mainXL { font-size:14.5px; font-weight:800; fill:#0B2443; }
+    .formula{ font-family:"SF Mono",Menlo,Consolas,monospace; font-size:13px; font-weight:700; fill:#0B2443; }
+    .big    { font-size:18px;   font-weight:800; fill:#0B2443; letter-spacing:.3px; }
+    .chev   { font-size:14px;   font-weight:800; fill:#ffffff; letter-spacing:1.4px; }
+    .chevNum{ font-size:10.5px; font-weight:700; fill:#ffffff; opacity:.78; letter-spacing:1.2px; }
+    .arr    { font-size:11.5px; font-weight:700; paint-order:stroke; stroke:#ffffff; stroke-width:3.5px; stroke-linejoin:round; }
+    .arrD   { fill:#0B2443; }
+    .arrT   { fill:#006B7D; }
+    .arrB   { fill:#0052CC; }
+    .arrE   { fill:#007049; }
+
+    @keyframes marching { to { stroke-dashoffset: -28; } }
+    .flow     { stroke-dasharray:14 6; animation: marching 1.4s linear infinite; }
+    .flowSlow { stroke-dasharray:10 5; animation: marching 2.4s linear infinite; }
+    @keyframes glow {
+      0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+      50%      { filter: drop-shadow(0 2px 14px rgba(0,112,73,0.55)); }
+    }
+    .glow { animation: glow 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin:center; }
+    @keyframes floatY {
+      0%, 100% { transform: translateY(0); }
+      50%      { transform: translateY(-3px); }
+    }
+    .floatY { animation: floatY 3.4s ease-in-out infinite; transform-box: fill-box; transform-origin:center; }
+    @keyframes appear {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .appear { animation: appear .6s ease both; }
+    .card { transition: transform .25s ease, filter .25s ease; transform-box: fill-box; transform-origin:center; cursor:default; }
+    .card:hover { transform: scale(1.035); filter: drop-shadow(0 6px 14px rgba(0,0,0,.15)); }
+    @keyframes wobble {
+      0%, 100% { transform: rotate(0deg); }
+      50%      { transform: rotate(-8deg); }
+    }
+    .wobbleKey { animation: wobble 3s ease-in-out infinite; transform-box: fill-box; transform-origin:center; }
+  </style>
+
+  <!-- ═════════════════ CHEVRONS ═════════════════ -->
+  <g class="appear" style="animation-delay:.0s">
+    <polygon points="40,20 240,20 260,50 240,80 40,80"                 fill="url(#gC1)" filter="url(#chevShadow)"/>
+    <text x="148"  y="46" text-anchor="middle" class="chevNum">01 · INPUT</text>
+    <text x="148"  y="68" text-anchor="middle" class="chev">CLIENTE</text>
+
+    <polygon points="280,20 480,20 500,50 480,80 280,80 300,50"        fill="url(#gC2)" filter="url(#chevShadow)"/>
+    <text x="392"  y="46" text-anchor="middle" class="chevNum">02 · TRANSPORT</text>
+    <text x="392"  y="68" text-anchor="middle" class="chev">TRANSPORTE</text>
+
+    <polygon points="520,20 720,20 740,50 720,80 520,80 540,50"        fill="url(#gC3)" filter="url(#chevShadow)"/>
+    <text x="632"  y="46" text-anchor="middle" class="chevNum">03 · AUTH</text>
+    <text x="632"  y="68" text-anchor="middle" class="chev">IDENTIDAD</text>
+
+    <polygon points="760,20 960,20 980,50 960,80 760,80 780,50"        fill="url(#gC4)" filter="url(#chevShadow)"/>
+    <text x="872"  y="46" text-anchor="middle" class="chevNum">04 · AEAD + WRAP</text>
+    <text x="872"  y="68" text-anchor="middle" class="chev">CIFRADO</text>
+
+    <polygon points="1000,20 1200,20 1220,50 1200,80 1000,80 1020,50"  fill="url(#gC5)" filter="url(#chevShadow)"/>
+    <text x="1112" y="46" text-anchor="middle" class="chevNum">05 · INTEGRITY</text>
+    <text x="1112" y="68" text-anchor="middle" class="chev">FIRMAS</text>
+
+    <polygon points="1240,20 1580,20 1580,80 1240,80 1260,50"          fill="url(#gC6)" filter="url(#chevShadow)"/>
+    <text x="1410" y="46" text-anchor="middle" class="chevNum">06 · STORAGE</text>
+    <text x="1410" y="68" text-anchor="middle" class="chev">ALMACÉN</text>
+  </g>
+
+  <!-- divisores verticales punteados -->
+  <g stroke="#9aacc5" stroke-width="1.2" stroke-dasharray="4 5" opacity=".55">
+    <line x1="270"  y1="100" x2="270"  y2="680"/>
+    <line x1="510"  y1="100" x2="510"  y2="680"/>
+    <line x1="750"  y1="100" x2="750"  y2="680"/>
+    <line x1="990"  y1="100" x2="990"  y2="680"/>
+    <line x1="1230" y1="100" x2="1230" y2="680"/>
+  </g>
+
+  <!-- ═════════════════ COL 1 · CLIENTE ═════════════════ -->
+  <g class="appear" style="animation-delay:.10s">
+    <g class="floatY">
+      <use href="#browser" x="105" y="160" width="100" height="100"/>
+    </g>
+    <text x="155" y="285" text-anchor="middle" class="big" fill="#0052CC">Navegador</text>
+
+    <!-- priv_ec -->
+    <g class="card">
+      <rect x="40" y="320" width="230" height="62" rx="11" fill="#F0F6FD" stroke="#a9c8ee" filter="url(#soft)"/>
+      <rect x="52" y="334" width="42" height="34" rx="8" fill="#0A84FF"/>
+      <use href="#key" x="60" y="338" width="26" height="26"/>
+      <text x="108" y="358" class="mainXL">priv_ec.pem</text>
+    </g>
+
+    <!-- priv_rsa -->
+    <g class="card">
+      <rect x="40" y="394" width="230" height="62" rx="11" fill="#EAF7F9" stroke="#9adde6" filter="url(#soft)"/>
+      <rect x="52" y="408" width="42" height="34" rx="8" fill="#00B8D9"/>
+      <use href="#key" x="60" y="412" width="26" height="26"/>
+      <text x="108" y="432" class="mainXL">priv_rsa.pem</text>
+    </g>
+
+    <!-- password -->
+    <g class="card">
+      <rect x="40" y="468" width="230" height="62" rx="11" fill="#F0F6FD" stroke="#a9c8ee" filter="url(#soft)"/>
+      <rect x="52" y="482" width="42" height="34" rx="8" fill="#0052CC"/>
+      <use href="#lock" x="60" y="486" width="26" height="26"/>
+      <text x="108" y="506" class="mainXL">password</text>
+    </g>
+  </g>
+
+  <!-- ═════════════════ HTTPS · TLS 1.3 ═════════════════ -->
+  <g class="appear" style="animation-delay:.20s">
+    <g class="floatY">
+      <rect x="290" y="380" width="180" height="34" rx="17" fill="#00B8D9" stroke="#006B7D" stroke-width="1.2" filter="url(#soft)"/>
+      <use href="#shield" x="300" y="386" width="22" height="22"/>
+      <text x="392" y="402" text-anchor="middle" font-size="13.5" font-weight="800" fill="#fff" letter-spacing=".8">HTTPS · TLS 1.3</text>
+    </g>
+    <line x1="270" y1="430" x2="498" y2="430" stroke="#00B8D9" stroke-width="5" class="flow" stroke-linecap="round"/>
+    <polygon points="498,422 514,430 498,438" fill="#00B8D9"/>
+  </g>
+
+  <!-- ═════════════════ COL 2 · TRANSPORTE / nginx ═════════════════ -->
+  <g class="appear" style="animation-delay:.30s">
+    <g class="card">
+      <rect x="290" y="440" width="200" height="180" rx="12" fill="url(#gNginx)" stroke="#9adde6" filter="url(#soft)"/>
+      <rect x="290" y="440" width="200" height="32" rx="12" fill="#00B8D9"/>
+      <text x="390" y="461" text-anchor="middle" class="head">EDGE · NGINX</text>
+
+      <use href="#shield" x="346" y="492" width="88" height="88"/>
+      <text x="390" y="600" text-anchor="middle" class="main" fill="#006B7D">TLS 1.3 exclusivo</text>
+    </g>
+  </g>
+
+  <!-- fan-out: nginx → 3 carriles -->
+  <g>
+    <path d="M 490 530 L 504 530 L 504 165 L 1112 165" fill="none" stroke="#0B2443" stroke-width="1.6" class="flowSlow"/>
+    <line x1="632"  y1="165" x2="632"  y2="200" stroke="#0B2443" stroke-width="1.6" marker-end="url(#ah)"/>
+    <line x1="872"  y1="165" x2="872"  y2="200" stroke="#0B2443" stroke-width="1.6" marker-end="url(#ah)"/>
+    <line x1="1112" y1="165" x2="1112" y2="200" stroke="#0B2443" stroke-width="1.6" marker-end="url(#ah)"/>
+
+    <text x="632"  y="158" text-anchor="middle" class="arr arrB">password / CSR</text>
+    <text x="872"  y="158" text-anchor="middle" class="arr arrD">R · AAD · S_D</text>
+    <text x="1112" y="158" text-anchor="middle" class="arr arrT">pub / cert</text>
+  </g>
+
+  <!-- ═════════════════ COL 3 · IDENTIDAD ═════════════════ -->
+  <g class="appear" style="animation-delay:.40s">
+    <text x="632" y="220" text-anchor="middle" class="lane" fill="#0052CC">CARRIL · IDENTIDAD</text>
+
+    <!-- Argon2id -->
+    <g class="card">
+      <rect x="520" y="240" width="224" height="78" rx="11" fill="#F0F6FD" stroke="#a9c8ee" filter="url(#soft)"/>
+      <rect x="520" y="240" width="224" height="26" rx="11" fill="#0052CC"/>
+      <use href="#lock" x="530" y="245" width="18" height="18"/>
+      <text x="556" y="259" font-size="11" font-weight="700" fill="#fff" letter-spacing=".7">ARGON2ID · KDF</text>
+      <text x="632" y="298" text-anchor="middle" class="formula">hash(pwd + salt)</text>
+    </g>
+
+    <line x1="632" y1="318" x2="632" y2="342" stroke="#0B2443" stroke-width="1.4" marker-end="url(#ah)"/>
+
+    <!-- CA X.509 -->
+    <g class="card">
+      <rect x="520" y="344" width="224" height="78" rx="11" fill="#F0F6FD" stroke="#a9c8ee" filter="url(#soft)"/>
+      <rect x="520" y="344" width="224" height="26" rx="11" fill="#0052CC"/>
+      <use href="#cert" x="530" y="349" width="18" height="18"/>
+      <text x="556" y="363" font-size="11" font-weight="700" fill="#fff" letter-spacing=".7">CA INTERNA · X.509</text>
+      <text x="632" y="402" text-anchor="middle" class="formula">Sign(CSR) → cert</text>
+    </g>
+
+    <line x1="632" y1="422" x2="632" y2="446" stroke="#0B2443" stroke-width="1.4" marker-end="url(#ah)"/>
+
+    <!-- JWT -->
+    <g class="card">
+      <rect x="520" y="448" width="224" height="78" rx="11" fill="#EAF7F9" stroke="#9adde6" filter="url(#soft)"/>
+      <rect x="520" y="448" width="224" height="26" rx="11" fill="#00B8D9"/>
+      <use href="#token" x="530" y="453" width="18" height="18"/>
+      <text x="556" y="467" font-size="11" font-weight="700" fill="#fff" letter-spacing=".7">JWT HS256 · SESIÓN</text>
+      <text x="632" y="506" text-anchor="middle" class="formula">HMAC(secret, claims)</text>
+    </g>
+  </g>
+
+  <!-- ═════════════════ COL 4 · CIFRADO HÍBRIDO ═════════════════ -->
+  <g class="appear" style="animation-delay:.50s">
+    <text x="872" y="220" text-anchor="middle" class="lane" fill="#007049">CARRIL · CIFRADO HÍBRIDO</text>
+
+    <!-- canonical(R) -->
+    <g class="card">
+      <rect x="760" y="240" width="224" height="58" rx="11" fill="#ECF4FD" stroke="#a9c8ee" filter="url(#soft)"/>
+      <rect x="760" y="240" width="224" height="22" rx="11" fill="#0A84FF"/>
+      <text x="872" y="256" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff" letter-spacing=".7">canonical_bytes(R)</text>
+      <text x="872" y="285" text-anchor="middle" class="main">JSON sort_keys · UTF-8</text>
+    </g>
+
+    <line x1="872" y1="298" x2="872" y2="322" stroke="#0A84FF" stroke-width="1.8" class="flow" marker-end="url(#ahB)"/>
+
+    <!-- AES-128-GCM -->
+    <g class="card">
+      <rect x="760" y="324" width="224" height="84" rx="11" fill="#EBF7F1" stroke="#9bdcb1" filter="url(#soft)"/>
+      <rect x="760" y="324" width="224" height="26" rx="11" fill="#00A870"/>
+      <use href="#aead" x="770" y="329" width="18" height="18"/>
+      <text x="796" y="343" font-size="11" font-weight="700" fill="#fff" letter-spacing=".7">AES-128-GCM · AEAD</text>
+      <text x="872" y="373" text-anchor="middle" class="formula">AES-GCM(DEK, IV, R, AAD)</text>
+      <text x="872" y="395" text-anchor="middle" font-size="12" font-weight="800" fill="#007049">→ (C, TAG)</text>
+    </g>
+
+    <line x1="872" y1="408" x2="872" y2="432" stroke="#00B8D9" stroke-width="1.8" class="flow" marker-end="url(#ahT)"/>
+    <text x="884" y="426" class="arr arrT">DEK</text>
+
+    <!-- DEK chip -->
+    <g class="card">
+      <rect x="760" y="434" width="224" height="46" rx="23" fill="#EAF7F9" stroke="#9adde6" filter="url(#soft)"/>
+      <g class="wobbleKey">
+        <rect x="760" y="434" width="46" height="46" rx="23" fill="#00B8D9"/>
+        <use href="#key" x="768" y="442" width="30" height="30"/>
+      </g>
+      <text x="824" y="462" class="main" fill="#006B7D">DEK · 128 b</text>
+    </g>
+
+    <line x1="872" y1="482" x2="872" y2="506" stroke="#00B8D9" stroke-width="1.8" class="flow" marker-end="url(#ahT)"/>
+    <text x="884" y="500" class="arr arrT">N copias</text>
+
+    <!-- RSA-OAEP fan-out -->
+    <g class="card">
+      <rect x="760" y="508" width="224" height="88" rx="11" fill="#EAF7F9" stroke="#9adde6" filter="url(#soft)"/>
+      <rect x="760" y="508" width="224" height="26" rx="11" fill="#006B7D"/>
+      <use href="#envelope" x="770" y="513" width="18" height="18"/>
+      <text x="796" y="527" font-size="11" font-weight="700" fill="#fff" letter-spacing=".7">RSA-2048-OAEP · WRAP</text>
+      <text x="872" y="555" text-anchor="middle" class="formula">Encrypt(pub_*, DEK)</text>
+      <text x="872" y="580" text-anchor="middle" font-size="12" font-weight="800" fill="#006B7D">→ C_wrap_*</text>
+    </g>
+  </g>
+
+  <!-- ═════════════════ COL 5 · FIRMAS ═════════════════ -->
+  <g class="appear" style="animation-delay:.60s">
+    <text x="1112" y="220" text-anchor="middle" class="lane" fill="#0052CC">CARRIL · FIRMAS</text>
+
+    <!-- ECDSA-Sign -->
+    <g class="card">
+      <rect x="1000" y="240" width="224" height="78" rx="11" fill="#ECF4FD" stroke="#a9c8ee" filter="url(#soft)"/>
+      <rect x="1000" y="240" width="224" height="26" rx="11" fill="#0A84FF"/>
+      <use href="#sig" x="1010" y="245" width="18" height="18"/>
+      <text x="1036" y="259" font-size="11" font-weight="700" fill="#fff" letter-spacing=".7">ECDSA-SIGN · P-256/SHA3</text>
+      <text x="1112" y="298" text-anchor="middle" class="formula">Sign(priv_ec, R) = S_D</text>
+    </g>
+
+    <line x1="1112" y1="318" x2="1112" y2="342" stroke="#0B2443" stroke-width="1.4" marker-end="url(#ah)"/>
+
+    <!-- ECDSA-Verify ★ (glow verde) -->
+    <g class="card glow">
+      <rect x="1000" y="344" width="224" height="92" rx="11" fill="#EBF7F1" stroke="#007049" stroke-width="1.6" filter="url(#soft)"/>
+      <rect x="1000" y="344" width="224" height="28" rx="11" fill="#007049"/>
+      <use href="#sig" x="1010" y="350" width="18" height="18"/>
+      <text x="1112" y="364" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" letter-spacing=".8">★ ECDSA-VERIFY · CRÍTICO</text>
+      <text x="1112" y="394" text-anchor="middle" class="formula">Verify(pub_ec, R, S_D)</text>
+      <text x="1112" y="418" text-anchor="middle" font-size="11" font-weight="700" fill="#007049">autenticidad del médico</text>
+    </g>
+
+    <line x1="1112" y1="436" x2="1112" y2="460" stroke="#0B2443" stroke-width="1.4" marker-end="url(#ah)"/>
+
+    <!-- SHA3-256 -->
+    <g class="card">
+      <rect x="1000" y="462" width="224" height="78" rx="11" fill="#F0F6FD" stroke="#a9c8ee" filter="url(#soft)"/>
+      <rect x="1000" y="462" width="224" height="26" rx="11" fill="#0B2443"/>
+      <use href="#finger" x="1010" y="467" width="18" height="18"/>
+      <text x="1036" y="481" font-size="11" font-weight="700" fill="#fff" letter-spacing=".7">SHA3-256 · HASH</text>
+      <text x="1112" y="520" text-anchor="middle" class="formula">hash_sha3(R)</text>
+    </g>
+  </g>
+
+  <!-- fan-in: 3 carriles → ALMACÉN -->
+  <g>
+    <line x1="632"  y1="526" x2="632"  y2="660" stroke="#0052CC" stroke-width="1.6" class="flowSlow"/>
+    <line x1="872"  y1="596" x2="872"  y2="660" stroke="#0052CC" stroke-width="1.6" class="flowSlow"/>
+    <line x1="1112" y1="540" x2="1112" y2="660" stroke="#0052CC" stroke-width="1.6" class="flowSlow"/>
+    <line x1="632"  y1="660" x2="1300" y2="660" stroke="#0052CC" stroke-width="1.6"/>
+    <path d="M 1300 660 L 1340 660 L 1340 470" fill="none" stroke="#0052CC" stroke-width="1.8" class="flow" marker-end="url(#ahB)"/>
+
+    <text x="632"  y="686" text-anchor="middle" class="arr arrB">hash · cert X.509</text>
+    <text x="872"  y="624" text-anchor="middle" class="arr arrB">C · TAG · IV · AAD · C_wrap_*</text>
+    <text x="1112" y="560" text-anchor="middle" class="arr arrB">S_D · S_F · hash_sha3</text>
+  </g>
+
+  <!-- ═════════════════ COL 6 · ALMACÉN ═════════════════ -->
+  <g class="appear" style="animation-delay:.70s">
+    <g class="floatY">
+      <ellipse cx="1410" cy="290" rx="92" ry="22" fill="url(#gCyl)" stroke="#0B2443" stroke-width="1.5"/>
+      <rect    x="1318" y="290" width="184" height="180" fill="url(#gCylDark)" stroke="#0B2443" stroke-width="1.5"/>
+      <ellipse cx="1410" cy="470" rx="92" ry="22" fill="#0B2443" stroke="#0B2443" stroke-width="1.5"/>
+      <ellipse cx="1410" cy="290" rx="92" ry="22" fill="none" stroke="#0A84FF" stroke-width="1.5"/>
+      <ellipse cx="1410" cy="350" rx="92" ry="22" fill="none" stroke="#0A84FF" stroke-width=".8" opacity=".55"/>
+      <ellipse cx="1410" cy="410" rx="92" ry="22" fill="none" stroke="#0A84FF" stroke-width=".8" opacity=".55"/>
+      <use href="#db" x="1380" y="350" width="60" height="60"/>
+    </g>
+
+    <text x="1410" y="508" text-anchor="middle" class="big" fill="#0052CC">MySQL 8.4</text>
+    <text x="1410" y="528" text-anchor="middle" class="main" fill="#5B6B7B">red interna · sin :ports</text>
+
+    <g class="card">
+      <rect x="1260" y="548" width="300" height="120" rx="11" fill="#F0F6FD" stroke="#a9c8ee" filter="url(#soft)"/>
+      <rect x="1260" y="548" width="300" height="26" rx="11" fill="#0052CC"/>
+      <text x="1410" y="566" text-anchor="middle" class="head">PERSISTE  ·  SOLO PÚBLICO / CIFRADO</text>
+      <text x="1410" y="592" text-anchor="middle" class="main">blobs · pubs · X.509</text>
+      <text x="1410" y="612" text-anchor="middle" class="main">firmas · envolturas · audit</text>
+      <line x1="1280" y1="624" x2="1540" y2="624" stroke="#a9c8ee" stroke-width="1"/>
+      <text x="1410" y="648" text-anchor="middle" font-size="12" font-weight="800" fill="#007049" letter-spacing=".6">★ jamás privadas · password · DEK</text>
+    </g>
+  </g>
+
+</svg>
+      </div>
+  </div>
+
+</div>
+</body>
+</html>

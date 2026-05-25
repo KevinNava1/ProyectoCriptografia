@@ -97,6 +97,7 @@ export const usuariosAPI = {
     api.post("/usuarios/recuperar-password", { email }),
   resetPassword: (token, nueva_password) =>
     api.post("/usuarios/reset-password", { token, nueva_password }),
+  misCertificados: () => api.get("/usuarios/me/certificados"),
 };
 
 const withKeys = { attachPrivKeys: true };

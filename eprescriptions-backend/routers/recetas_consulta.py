@@ -192,7 +192,11 @@ def consultar_recetas_farmaceutico(
             medico and medico.pub_ec_pem
             and ecdsa_verify(medico.pub_ec_pem, r_bytes, r.firma_doctor)
         )
-        out.append(hidratar(r, contenido, db, firma_medico_ok=firma_ok))
+        out.append(hidratar(
+            r, contenido, db,
+            firma_medico_ok=firma_ok,
+            farmaceutico_propio_id=user.id,
+        ))
     return out
 
 

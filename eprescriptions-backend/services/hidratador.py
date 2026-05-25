@@ -23,6 +23,7 @@ def hidratar(
     contenido: dict[str, Any],
     db: Session,
     firma_medico_ok: bool | None = None,
+    farmaceutico_propio_id: int | None = None,
 ) -> RecetaDescifrada:
     medico = db.query(Usuario).filter(Usuario.id == r.medico_id).first()
     paciente = db.query(Usuario).filter(Usuario.id == r.paciente_id).first()
@@ -64,6 +65,42 @@ def hidratar(
             "soporte de SecureRx."
         )
 
+    # ISO de la última dispensación — el front del farma lo usa para que sus
+    # charts/calendar muestren la fecha de la ACCIÓN, no la de creación.
+    ultima_dispensacion = (
+        last_ev.timestamp.isoformat() if last_ev and last_ev.timestamp else None
+    )
+    # Lista de fechas en que el paciente firmó acuse para esta receta. El
+    # front del paciente expande esto para que el heatmap pinte un punto
+    # por cada acuse firmado (una receta puede tener varios).
+    firmas_paciente = [
+        e.fecha_firma_paciente.isoformat()
+        for e in r.eventos
+        if e.fecha_firma_paciente
+    ]
+    # Farmacias autorizadas — solo metadata (id, username) para que la UI
+    # del paciente muestre a dónde puede dispensar. El envoltorio cripto
+    # de la DEK ya quedó atado a la pub RSA de cada farmacia.
+    farmacias_autorizadas = []
+    for acc in r.accesos_farmacias:
+        f = db.query(Usuario).filter(Usuario.id == acc.farmacia_id).first()
+        if f:
+            farmacias_autorizadas.append({"id": f.id, "username": f.username, "nombre": f.nombre})
+
+    # Dispensaciones hechas SOLO por el farma que está consultando. Si una
+    # receta tiene eventos de varios farmas, aquí solo entran los del farma
+    # actual — el frontend expande estos para graficar 1 punto por cada
+    # acción que él hizo.
+    dispensaciones_propias = (
+        [
+            e.timestamp.isoformat()
+            for e in r.eventos
+            if e.timestamp and e.farmaceutico_id == farmaceutico_propio_id
+        ]
+        if farmaceutico_propio_id is not None
+        else []
+    )
+
     return RecetaDescifrada(
         id=r.id,
         medico_id=r.medico_id,
@@ -87,4 +124,8 @@ def hidratar(
         dispensaciones_permitidas=r.dispensaciones_permitidas,
         dispensaciones_realizadas=r.dispensaciones_realizadas,
         parent_id=r.parent_id,
+        ultima_dispensacion=ultima_dispensacion,
+        firmas_paciente=firmas_paciente,
+        dispensaciones_propias=dispensaciones_propias,
+        farmacias_autorizadas=farmacias_autorizadas,
     )

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { User, Pill, ShieldCheck, Check, Sparkles, ArrowRight, ArrowLeft, Loader2, FileSignature, AtSign, Search } from 'lucide-react'
+import { User, Pill, ShieldCheck, Check, Sparkles, ArrowRight, ArrowLeft, Loader2, FileSignature, AtSign, Search, Bookmark, BookmarkPlus, Trash2, X } from 'lucide-react'
 import PageTransition from '../components/ui/PageTransition'
 import SecureCard from '../components/ui/SecureCard'
 import SessionKeyPicker, { validateKeysBundle } from '../components/ui/SessionKeyPicker'
@@ -39,6 +39,56 @@ export default function NuevaReceta() {
   const [signing, setSigning] = useState(false)
   const [signed, setSigned] = useState(false)
   const [shakeCls, shake] = useShake()
+  const [plantillasOpen, setPlantillasOpen] = useState(false)
+  const PLANTILLAS_KEY = `securerx_plantillas_${user?.username || 'anon'}`
+
+  // Plantillas guardadas en localStorage (por médico). NUNCA tocan la cripto:
+  // solo guardan campos del formulario que el médico repite frecuentemente.
+  const [plantillas, setPlantillas] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(PLANTILLAS_KEY) || '[]') } catch { return [] }
+  })
+  const persistPlantillas = (next) => {
+    setPlantillas(next)
+    localStorage.setItem(PLANTILLAS_KEY, JSON.stringify(next))
+  }
+  const guardarPlantilla = () => {
+    if (!form.medicamento || !form.dosis) {
+      return toast.error('Completa medicamento y dosis antes de guardar la plantilla')
+    }
+    const nombre = window.prompt(
+      'Nombre para esta plantilla',
+      `${form.medicamento} ${form.dosis}`,
+    )
+    if (!nombre) return
+    const nueva = {
+      id: Date.now(),
+      nombre: nombre.trim(),
+      medicamento: form.medicamento,
+      dosis: form.dosis,
+      cantidad: Number(form.cantidad) || 1,
+      instrucciones: form.instrucciones,
+      dispensaciones_permitidas: Number(form.dispensaciones_permitidas) || 1,
+      intervalo_dias: form.intervalo_dias,
+    }
+    persistPlantillas([nueva, ...plantillas].slice(0, 30))
+    toast.success(`Plantilla "${nueva.nombre}" guardada`)
+  }
+  const aplicarPlantilla = (p) => {
+    setForm(f => ({
+      ...f,
+      medicamento: p.medicamento,
+      dosis: p.dosis,
+      cantidad: p.cantidad,
+      instrucciones: p.instrucciones,
+      dispensaciones_permitidas: p.dispensaciones_permitidas,
+      intervalo_dias: p.intervalo_dias,
+    }))
+    setPlantillasOpen(false)
+    toast.success(`Plantilla "${p.nombre}" aplicada`)
+  }
+  const borrarPlantilla = (id) => {
+    persistPlantillas(plantillas.filter(p => p.id !== id))
+  }
 
   const onChange = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -136,7 +186,35 @@ export default function NuevaReceta() {
 
             {step === 2 && (
               <StepWrap key="s2">
-                <StepTitle icon={Pill} title="Detalles del medicamento" subtitle="Completa dosis, cantidad e instrucciones" />
+                <div className="flex items-start justify-between flex-wrap gap-3">
+                  <StepTitle icon={Pill} title="Detalles del medicamento" subtitle="Completa dosis, cantidad e instrucciones" />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPlantillasOpen(true)}
+                      className="btn btn-ghost btn-sm"
+                      title="Cargar plantilla guardada"
+                    >
+                      <Bookmark size={13}/> Plantillas
+                      {plantillas.length > 0 && (
+                        <span
+                          className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+                          style={{ background: 'rgba(10,132,255,0.18)', color: 'var(--blue-deep)' }}
+                        >
+                          {plantillas.length}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={guardarPlantilla}
+                      className="btn btn-ghost btn-sm"
+                      title="Guardar campos actuales como plantilla"
+                    >
+                      <BookmarkPlus size={13}/> Guardar
+                    </button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Field label="Medicamento">
                     <input value={form.medicamento} onChange={e => onChange('medicamento', e.target.value)} className="input-field" placeholder="Amoxicilina 500mg" />
@@ -309,6 +387,78 @@ export default function NuevaReceta() {
           )}
         </SecureCard>
       </div>
+
+      {/* MODAL PLANTILLAS */}
+      <AnimatePresence>
+        {plantillasOpen && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-[120]"
+              style={{ background: 'rgba(10,25,48,0.6)' }}
+              onClick={() => setPlantillasOpen(false)}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            />
+            <motion.div
+              className="fixed inset-0 z-[121] flex items-center justify-center p-4 pointer-events-none"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            >
+              <motion.div
+                className="modal-card w-full max-w-lg pointer-events-auto"
+                initial={{ scale: 0.94, y: 16, opacity: 0 }}
+                animate={{ scale: 1, y: 0, opacity: 1 }}
+                exit={{ scale: 0.96, y: 8, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+              >
+                <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-[var(--border-subtle)]">
+                  <h3 className="font-heading text-lg flex items-center gap-2">
+                    <Bookmark size={18} className="text-[color:var(--cyan)]" />
+                    Plantillas guardadas
+                  </h3>
+                  <button onClick={() => setPlantillasOpen(false)} className="p-1.5 rounded-lg hover:bg-[rgba(10,132,255,0.1)]">
+                    <X size={18} />
+                  </button>
+                </div>
+                <div className="px-5 py-4 max-h-[60vh] overflow-y-auto space-y-2">
+                  {plantillas.length === 0 ? (
+                    <div className="text-center py-8 text-sm text-[color:var(--text-secondary)]">
+                      No tienes plantillas guardadas todavía.
+                      <br />Llena el formulario y dale "Guardar".
+                    </div>
+                  ) : (
+                    plantillas.map(p => (
+                      <div
+                        key={p.id}
+                        className="rounded-xl p-3 flex items-center gap-3"
+                        style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-subtle)' }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => aplicarPlantilla(p)}
+                          className="flex-1 text-left min-w-0"
+                        >
+                          <div className="font-semibold text-sm truncate">{p.nombre}</div>
+                          <div className="text-xs text-[color:var(--text-secondary)] truncate">
+                            {p.medicamento} · {p.dosis} · x{p.cantidad}
+                            {p.dispensaciones_permitidas > 1 && ` · ${p.dispensaciones_permitidas} surt.`}
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => borrarPlantilla(p.id)}
+                          className="p-1.5 rounded-lg text-[color:var(--text-secondary)] hover:text-[#B42318] hover:bg-[rgba(180,35,24,0.08)]"
+                          title="Borrar plantilla"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </PageTransition>
   )
 }
@@ -322,12 +472,23 @@ function PacienteTypeahead({ value, onChange, onPick }) {
   const wrapRef = useRef(null)
   const inputRef = useRef(null)
   const lastQ = useRef('')
+  // Guardamos aquí el username del paciente recién elegido. Cuando `value`
+  // se sincroniza a ese mismo username (por el onPick→setForm), el effect
+  // de búsqueda lo VE y NO dispara nueva búsqueda / nuevo dropdown. Sin
+  // esto, al seleccionar reabría el typeahead inmediatamente — el bug que
+  // hacía que "no procesara el click".
+  const pickedUsername = useRef('')
 
   // Debounce: dispara la búsqueda 250ms después del último teclazo.
   useEffect(() => {
     const q = (value || '').trim()
     if (q.length === 0) {
       setMatches([]); setError(null); setOpen(false); return
+    }
+    // Si el valor actual coincide con el username que acabamos de elegir,
+    // no re-buscar — fue un cambio causado por la propia selección.
+    if (q === pickedUsername.current) {
+      setOpen(false); setMatches([]); setError(null); return
     }
     setLoading(true)
     const t = setTimeout(async () => {
@@ -359,9 +520,14 @@ function PacienteTypeahead({ value, onChange, onPick }) {
   }, [open])
 
   const choose = (p) => {
+    // Registramos el username elegido ANTES de propagar arriba para que
+    // el effect de búsqueda no dispare al sincronizar `value`.
+    pickedUsername.current = p.username
     onPick(p)
     setOpen(false)
     setMatches([])
+    setError(null)
+    setLoading(false)
     inputRef.current?.blur()
   }
 

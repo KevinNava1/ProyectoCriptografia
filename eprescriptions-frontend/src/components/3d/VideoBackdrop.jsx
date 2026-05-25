@@ -19,9 +19,9 @@ export default function VideoBackdrop({
       'radial-gradient(ellipse at 70% 80%, rgba(0,184,217,0.18), transparent 55%)',
     ],
     strong: [
-      'linear-gradient(180deg, rgba(238,244,251,0.52) 0%, rgba(238,244,251,0.32) 40%, rgba(238,244,251,0.62) 100%)',
-      'radial-gradient(ellipse at 30% 20%, rgba(10,132,255,0.28), transparent 55%)',
-      'radial-gradient(ellipse at 70% 80%, rgba(0,184,217,0.22), transparent 55%)',
+      // Velo BLANCO denso para que el fondo se sienta blanco en vez de
+      // azulado. Sin radial-gradients azules.
+      'linear-gradient(180deg, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.70) 40%, rgba(255,255,255,0.82) 100%)',
     ],
   }[intensity]
 

@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { motion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
-import { Download } from "lucide-react";
+import { Download, QrCode, ScanLine } from "lucide-react";
 
 /**
  * QRReceta — muestra el QR de una receta para que el paciente lo guarde.
@@ -10,23 +10,30 @@ import { Download } from "lucide-react";
  * El farmacéutico lo escanea con EscanearQR y el sistema busca la receta.
  *
  * Props:
- *   recetaId    — número/string, id de la receta
- *   medicamento — string, nombre para el label y el archivo descargado
+ *   recetaId — número/string, id de la receta
+ *   size     — tamaño en px del QR (default 180; en modal usar 220-260)
  */
-export default function QRReceta({ recetaId, medicamento = "" }) {
+export default function QRReceta({ recetaId, size = 180 }) {
   const svgId = `qr-rx-${recetaId}`;
 
   const descargar = useCallback(() => {
     const svgEl = document.getElementById(svgId);
     if (!svgEl) return;
 
-    const SIZE = 400;
+    // QUIET ZONE obligatoria — los lectores QR (incluido html5-qrcode) exigen
+    // un margen blanco de ≥4 módulos alrededor de la matriz. Sin él, escaneos
+    // desde PNG impreso fallan. Lienzo 640 con 80px (12.5%) de margen → QR
+    // efectivo 480×480 centrado sobre fondo blanco.
+    const SIZE = 640;
+    const PADDING = 80;
+    const QR_SIZE = SIZE - PADDING * 2;
+
     const canvas = document.createElement("canvas");
     canvas.width = SIZE;
     canvas.height = SIZE;
     const ctx = canvas.getContext("2d");
 
-    // Fondo blanco obligatorio para que el QR tenga contraste
+    // Fondo blanco completo → es la quiet zone.
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, SIZE, SIZE);
 
@@ -35,7 +42,8 @@ export default function QRReceta({ recetaId, medicamento = "" }) {
     const url = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => {
-      ctx.drawImage(img, 0, 0, SIZE, SIZE);
+      // Pintamos el QR CENTRADO con padding alrededor.
+      ctx.drawImage(img, PADDING, PADDING, QR_SIZE, QR_SIZE);
       URL.revokeObjectURL(url);
       const a = document.createElement("a");
       a.download = `receta-${recetaId}-qr.png`;
@@ -47,54 +55,163 @@ export default function QRReceta({ recetaId, medicamento = "" }) {
 
   return (
     <div
-      className="flex flex-col items-center gap-3 p-4 rounded-xl"
+      className="flex flex-col items-center gap-4 p-5 rounded-2xl relative overflow-hidden"
       style={{
-        background: "rgba(10,132,255,0.04)",
-        border: "1px solid rgba(10,132,255,0.20)",
+        background:
+          "linear-gradient(160deg, #F4FAFF 0%, #E8F2FE 60%, #DCEBFD 100%)",
+        border: "1px solid rgba(10,132,255,0.32)",
+        boxShadow:
+          "inset 0 1px 0 rgba(255,255,255,0.75), 0 8px 28px rgba(10,36,67,0.10)",
       }}
     >
-      <div className="label-xs self-start">Código QR — receta #{recetaId}</div>
-
-      {/* QR sobre fondo blanco con padding interno */}
+      {/* Halo decorativo (fondo) para reforzar contraste sin estorbar */}
       <div
-        className="p-3 rounded-xl"
+        aria-hidden
+        className="absolute pointer-events-none"
         style={{
-          background: "#ffffff",
-          boxShadow: "0 4px 18px rgba(10,36,67,0.13)",
+          top: "-40%",
+          right: "-15%",
+          width: 240,
+          height: 240,
+          background:
+            "radial-gradient(circle, rgba(10,132,255,0.18), transparent 65%)",
+          filter: "blur(28px)",
         }}
-      >
-        <QRCodeSVG
-          id={svgId}
-          value={String(recetaId)} // codifica solo el ID
-          size={148}
-          level="M"
-          includeMargin={false}
-          fgColor="#0B2443"
-          bgColor="#ffffff"
-        />
+      />
+      <div
+        aria-hidden
+        className="absolute pointer-events-none"
+        style={{
+          bottom: "-30%",
+          left: "-15%",
+          width: 220,
+          height: 220,
+          background:
+            "radial-gradient(circle, rgba(0,168,112,0.12), transparent 65%)",
+          filter: "blur(28px)",
+        }}
+      />
+
+      {/* Header con label visible (peso medio + color oscuro) */}
+      <div className="relative z-10 flex items-center justify-between w-full">
+        <div className="flex items-center gap-2">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+            style={{
+              background: "rgba(10,132,255,0.14)",
+              border: "1px solid rgba(10,132,255,0.36)",
+            }}
+          >
+            <QrCode size={14} style={{ color: "#0A4FB3" }} />
+          </div>
+          <div className="min-w-0">
+            <div
+              className="text-[10.5px] font-semibold uppercase tracking-wider"
+              style={{ color: "#0A4FB3", letterSpacing: "0.08em" }}
+            >
+              Código QR
+            </div>
+            <div
+              className="text-xs font-mono"
+              style={{ color: "#0B2443", fontWeight: 600 }}
+            >
+              Receta #{recetaId}
+            </div>
+          </div>
+        </div>
+        <span
+          className="text-[10px] font-mono px-2 py-1 rounded-md"
+          style={{
+            background: "rgba(10,132,255,0.10)",
+            border: "1px solid rgba(10,132,255,0.30)",
+            color: "#0A4FB3",
+            fontWeight: 600,
+          }}
+        >
+          ID-only
+        </span>
       </div>
 
-      <p
-        className="text-xs text-center leading-relaxed max-w-[180px]"
-        style={{ color: "var(--text-secondary)" }}
-      >
-        El farmacéutico escanea este QR para encontrar tu receta al instante.
-      </p>
+      {/* QR sobre fondo blanco sólido con esquinas tipo "framecorners" */}
+      <div className="relative z-10">
+        <div
+          className="p-4 rounded-2xl relative"
+          style={{
+            background: "#ffffff",
+            boxShadow:
+              "0 10px 32px rgba(10,36,67,0.18), 0 0 0 1px rgba(10,132,255,0.18)",
+          }}
+        >
+          <QRCodeSVG
+            id={svgId}
+            value={String(recetaId)}
+            size={size}
+            // level="Q" (25% error correction) → tolera mejor manchas/borrones
+            // en impresión y captura por cámara que el "M" anterior.
+            level="Q"
+            // Quiet zone built-in: el SVG ya incluye los 4 módulos de margen
+            // blanco que necesita el lector. Garantiza legibilidad si alguien
+            // toma screenshot del QR en pantalla en vez de descargar el PNG.
+            includeMargin={true}
+            fgColor="#0B2443"
+            bgColor="#ffffff"
+          />
+          {/* Marcas decorativas en las esquinas */}
+          <Corner pos="top-left" />
+          <Corner pos="top-right" />
+          <Corner pos="bottom-left" />
+          <Corner pos="bottom-right" />
+        </div>
+      </div>
+
+      {/* Descripción con contraste reforzado */}
+      <div className="relative z-10 flex items-start gap-2 max-w-[280px]">
+        <ScanLine
+          size={14}
+          style={{ color: "#0A4FB3" }}
+          className="shrink-0 mt-0.5"
+        />
+        <p
+          className="text-[12.5px] text-center leading-relaxed"
+          style={{ color: "#0B2443", fontWeight: 500 }}
+        >
+          El farmacéutico escanea este QR para encontrar tu receta al instante.
+        </p>
+      </div>
 
       <motion.button
-        whileHover={{ scale: 1.03 }}
+        whileHover={{ scale: 1.03, y: -1 }}
         whileTap={{ scale: 0.97 }}
         onClick={descargar}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium w-full justify-center"
+        className="relative z-10 flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold w-full justify-center transition-shadow"
         style={{
-          background: "rgba(10,132,255,0.12)",
-          border: "1px solid rgba(10,132,255,0.30)",
-          color: "var(--cyan, #0A84FF)",
+          background: "linear-gradient(135deg, #0A84FF 0%, #0052CC 100%)",
+          color: "#FFFFFF",
+          boxShadow: "0 6px 18px rgba(10,132,255,0.34)",
         }}
       >
-        <Download size={12} />
-        Guardar como PNG
+        <Download size={13} />
+        Guardar como PNG (512×512)
       </motion.button>
     </div>
   );
+}
+
+// Esquinas decorativas que enmarcan el QR — solo estética, refuerza foco.
+function Corner({ pos }) {
+  const base = {
+    position: "absolute",
+    width: 14,
+    height: 14,
+    borderColor: "#0A4FB3",
+    borderStyle: "solid",
+    borderWidth: 0,
+  };
+  const map = {
+    "top-left":     { top: -2,    left: -2,    borderTopWidth: 2, borderLeftWidth: 2,   borderTopLeftRadius: 6 },
+    "top-right":    { top: -2,    right: -2,   borderTopWidth: 2, borderRightWidth: 2,  borderTopRightRadius: 6 },
+    "bottom-left":  { bottom: -2, left: -2,    borderBottomWidth: 2, borderLeftWidth: 2,  borderBottomLeftRadius: 6 },
+    "bottom-right": { bottom: -2, right: -2,   borderBottomWidth: 2, borderRightWidth: 2, borderBottomRightRadius: 6 },
+  };
+  return <span aria-hidden style={{ ...base, ...map[pos] }} />;
 }

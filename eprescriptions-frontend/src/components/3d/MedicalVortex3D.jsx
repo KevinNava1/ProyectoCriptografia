@@ -132,7 +132,7 @@ function TiltedRing({ radius, tilt, color, thickness = 0.02, dashed = false, spe
   const geom = useMemo(() => new THREE.TorusGeometry(radius, thickness, 12, dashed ? 60 : 160), [radius, thickness, dashed])
   return (
     <mesh ref={ref} geometry={geom} rotation={[tilt, 0, 0]}>
-      <meshBasicMaterial color={color} transparent opacity={dashed ? 0.55 : 0.8} />
+      <meshBasicMaterial color={color} transparent opacity={dashed ? 0.85 : 1.0} />
     </mesh>
   )
 }
@@ -148,9 +148,9 @@ function Scene() {
       <EventHorizon />
       <AccretionDisc particles={1100} />
 
-      <TiltedRing radius={2.4} tilt={-Math.PI / 2.4} color="#0A84FF" thickness={0.012} speed={0.18} />
-      <TiltedRing radius={3.1} tilt={-Math.PI / 2.2} color="#00B8D9" thickness={0.01}  speed={-0.14} />
-      <TiltedRing radius={3.8} tilt={-Math.PI / 1.9} color="#0052CC" thickness={0.008} speed={0.09} />
+      <TiltedRing radius={2.4} tilt={-Math.PI / 2.4} color="#FFFFFF" thickness={0.012} speed={0.18} />
+      <TiltedRing radius={3.1} tilt={-Math.PI / 2.2} color="#FFFFFF" thickness={0.01}  speed={-0.14} />
+      <TiltedRing radius={3.8} tilt={-Math.PI / 1.9} color="#FFFFFF" thickness={0.008} speed={0.09} />
 
       <CrossBadge position={[0, 0.2, 0]}   speed={0.7} phase={0} />
       <CrossBadge position={[0, -0.15, 0]} speed={0.55} phase={2.1} />

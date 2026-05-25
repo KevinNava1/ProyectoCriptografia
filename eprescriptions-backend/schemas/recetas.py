@@ -60,6 +60,27 @@ class RecetaDescifrada(BaseModel):
     dispensaciones_permitidas: int = 1
     dispensaciones_realizadas: int = 0
     parent_id: Optional[int] = None
+    # Timestamp ISO de la última dispensación (eventos_dispensacion.timestamp).
+    # Lo necesita el dashboard del farma: sus charts deben graficar por la
+    # fecha en que ÉL dispensó, no por la fecha de creación de la receta
+    # (que viene en `fecha` y puede ser de días/semanas atrás).
+    ultima_dispensacion: Optional[str] = None
+    # Lista de timestamps ISO de los acuses firmados por el paciente para
+    # esta receta. Cada uno corresponde a un evento_dispensacion donde el
+    # paciente firmó el acuse. El dashboard del paciente expande estos para
+    # graficar por la fecha en que ÉL firmó (no por creación de la receta).
+    firmas_paciente: list[str] = []
+    # Lista de timestamps ISO de las dispensaciones que realizó el FARMA
+    # que está consultando. Si una receta fue dispensada 3 veces por este
+    # mismo farma, hay 3 entradas. Si otros farmas también dispensaron,
+    # esas NO entran (el endpoint las filtra). El dashboard del farma
+    # expande estos para graficar por la fecha de cada acción que él hizo.
+    dispensaciones_propias: list[str] = []
+    # Lista de farmacias autorizadas a dispensar esta receta. Cada item es
+    # {id, username} — el envoltorio criptográfico ya quedó atado a su pub
+    # RSA al crear la receta; esto es solo metadata para que el paciente
+    # vea en su UI a dónde puede ir.
+    farmacias_autorizadas: list[dict] = []
 
 
 class DispensarInput(BaseModel):

@@ -118,7 +118,7 @@ export default function DispensationTicket({
         >
           <ShieldAlert size={18} style={{ color: '#B42318' }} className="shrink-0 mt-0.5" />
           <div className="min-w-0">
-            <div className="font-heading text-sm" style={{ color: '#B42318' }}>Sello criptográfico inválido</div>
+            <div className="font-editorial text-sm" style={{ color: '#B42318' }}>Sello criptográfico inválido</div>
             <div className="text-[11px] mt-0.5" style={{ color: '#7A1F12' }}>
               {ev.motivo_no_verificada || 'La firma ECDSA del farmacéutico no verifica contra el manifiesto.'}
             </div>
@@ -126,49 +126,27 @@ export default function DispensationTicket({
         </div>
       )}
 
-      {/* MAIN — medicamento + actores */}
-      <section className="relative px-6 sm:px-8 pt-5 pb-5 grid grid-cols-1 md:grid-cols-3 gap-5 z-10">
-        <div className="md:col-span-2 min-w-0">
-          <div className="label-xs flex items-center gap-1.5">
-            <Pill size={11} /> Medicamento
-          </div>
-          <h3
-            className="font-editorial mt-1"
-            style={{
-              fontSize: 'clamp(22px, 3vw, 28px)',
-              fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.1,
-              color: tampered ? '#B42318' : 'var(--text-primary)',
-              wordBreak: 'break-word',
-            }}
-          >
-            {ev.medicamento || receta?.medicamento || `Receta #${ev.receta_id}`}
-          </h3>
-          {receta?.dosis && (
-            <div
-              className="mt-2 font-medium"
-              style={{ fontSize: 17, color: 'var(--blue-deep)', lineHeight: 1.3 }}
-            >
-              {receta.dosis}
-            </div>
-          )}
-          {ev.observaciones && (
-            <div
-              className="mt-3 p-2.5 rounded-lg text-xs"
-              style={{ background: 'rgba(10,132,255,0.05)', border: '1px solid rgba(10,132,255,0.18)' }}
-            >
-              <span className="label-xs mr-1">Observación:</span>
-              <span className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>
-                {ev.observaciones}
-              </span>
-            </div>
-          )}
+      {/* Sección "Medicamento + actores" QUITADA — esa info ya se muestra
+          arriba en el RxTemplate. Aquí solo dejamos lo que es DEL EVENTO
+          de dispensación (observación del farma, sello, fechas, acciones). */}
+      {ev.observaciones && (
+        <div
+          className="mx-6 sm:mx-8 mt-4 mb-1 p-2.5 rounded-lg text-xs relative z-10"
+          style={{ background: 'rgba(10,132,255,0.05)', border: '1px solid rgba(10,132,255,0.18)' }}
+        >
+          <span className="label-xs mr-1">Observación del farmacéutico:</span>
+          <span className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+            {ev.observaciones}
+          </span>
         </div>
+      )}
 
-        <div className="space-y-2">
-          <Actor icon={Stethoscope} role="Médico"        handle={ev.medico_username} fallback={`id${ev.medico_id || '?'}`} initials={docInitials} />
-          <Actor icon={Stamp}      role="Farmacéutico"  handle={ev.farmaceutico_username} fallback={`id${ev.farmaceutico_id || '?'}`} initials={farmInitials} />
-          <Actor icon={User}       role="Paciente"      handle={ev.paciente_username} fallback={`id${ev.paciente_id || '?'}`} initials={'PT'} />
-        </div>
+      {/* Actores compactos en una sola fila — útil para identificar quién
+          dispensó y a quién, sin duplicar el medicamento que ya está arriba. */}
+      <section className="relative px-6 sm:px-8 pt-3 pb-4 grid grid-cols-1 sm:grid-cols-3 gap-2 z-10">
+        <Actor icon={Stethoscope} role="Médico"        handle={ev.medico_username} fallback={`id${ev.medico_id || '?'}`} initials={docInitials} />
+        <Actor icon={Stamp}      role="Farmacéutico"  handle={ev.farmaceutico_username} fallback={`id${ev.farmaceutico_id || '?'}`} initials={farmInitials} />
+        <Actor icon={User}       role="Paciente"      handle={ev.paciente_username} fallback={`id${ev.paciente_id || '?'}`} initials={'PT'} />
       </section>
 
       <div className="relative z-10">

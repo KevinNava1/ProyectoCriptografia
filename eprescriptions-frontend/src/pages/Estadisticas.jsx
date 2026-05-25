@@ -19,6 +19,19 @@ import {
 } from "../lib/dashboardStats";
 import { useAuthStore } from "../store/useAuthStore";
 import { recetasAPI } from "../api";
+import { datasetParaPaciente } from "../lib/stats/paciente";
+import { datasetParaMedico } from "../lib/stats/medico";
+import { datasetParaFarma } from "../lib/stats/farma";
+import PageHero from "../components/ui/PageHero";
+import iconPillBottle from "../assets/icons/pill-bottle.png";
+import iconHospital from "../assets/icons/hospital.png";
+import iconAmbulance from "../assets/icons/ambulance.png";
+
+const ICONO_POR_ROL = {
+  paciente: iconPillBottle,
+  medico: iconHospital,
+  farmaceutico: iconAmbulance,
+};
 
 // Página dedicada de estadísticas / dashboard analítico.
 // Vive aparte del Dashboard principal — esa página solo enseña un widget
@@ -32,6 +45,23 @@ export default function Estadisticas() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [version, setVersion] = useState(0);
+
+  // Refetch automático cuando la pestaña vuelve a estar visible / gana focus,
+  // así los cambios hechos en otras vistas (dispensar, firmar acuse) se
+  // reflejan al regresar a estadísticas sin reload manual.
+  useEffect(() => {
+    const onActive = () => {
+      if (document.visibilityState === "visible") {
+        setVersion((v) => v + 1);
+      }
+    };
+    document.addEventListener("visibilitychange", onActive);
+    window.addEventListener("focus", onActive);
+    return () => {
+      document.removeEventListener("visibilitychange", onActive);
+      window.removeEventListener("focus", onActive);
+    };
+  }, []);
 
   useEffect(() => {
     if (!user || user.rol === "admin") return;
@@ -61,12 +91,22 @@ export default function Estadisticas() {
     return () => { cancelled = true };
   }, [user, version]);
 
+  // Dataset que alimenta charts/calendar/heatmap según el rol. Cada rol
+  // tiene su propia función en src/lib/stats/<rol>.js — así la lógica de
+  // "qué fecha cuenta para mí" vive separada y no se mezcla.
+  const recetasGrafico = useMemo(() => {
+    if (user?.rol === "paciente") return datasetParaPaciente(recetas);
+    if (user?.rol === "farmaceutico") return datasetParaFarma(recetas);
+    if (user?.rol === "medico") return datasetParaMedico(recetas);
+    return recetas;
+  }, [recetas, user?.rol]);
+
   const donut = useMemo(() => donutEstados(recetas), [recetas]);
-  const line = useMemo(() => lineRecetasUltimos14(recetas), [recetas]);
-  const bar = useMemo(() => barEmitidasSemana(recetas), [recetas]);
+  const line = useMemo(() => lineRecetasUltimos14(recetasGrafico), [recetasGrafico]);
+  const bar = useMemo(() => barEmitidasSemana(recetasGrafico), [recetasGrafico]);
   const top = useMemo(() => topMedicamentos(recetas, 5), [recetas]);
-  const heat = useMemo(() => heatmapActividad(recetas, 12), [recetas]);
-  const resumen = useMemo(() => metricasResumen(recetas), [recetas]);
+  const heat = useMemo(() => heatmapActividad(recetasGrafico, 12), [recetasGrafico]);
+  const resumen = useMemo(() => metricasResumen(recetasGrafico), [recetasGrafico]);
 
   const rolLabel = {
     paciente: "Paciente",
@@ -77,41 +117,29 @@ export default function Estadisticas() {
   return (
     <PageTransition>
       <div className="space-y-6 min-w-0">
-        {/* Header */}
-        <header className="flex items-end justify-between flex-wrap gap-4 min-w-0">
-          <div className="min-w-0 flex-1">
-            <button
-              type="button"
-              onClick={() => nav("/dashboard")}
-              className="inline-flex items-center gap-1.5 text-xs text-[color:var(--text-secondary)] hover:text-[color:var(--cyan)] transition-colors mb-1"
-            >
-              <ArrowLeft size={12} /> Volver al dashboard
-            </button>
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: "rgba(10,132,255,0.10)", border: "1px solid rgba(10,132,255,0.32)" }}
-              >
-                <BarChart3 size={18} className="text-[color:var(--cyan)]" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="font-heading text-3xl md:text-[34px] leading-tight">
-                  Estadísticas
-                </h1>
-                <p className="text-xs text-[color:var(--text-secondary)] mt-0.5 truncate">
-                  Tu actividad detallada · Vista {rolLabel}
-                </p>
-              </div>
-            </div>
-          </div>
+        <PageHero
+          eyebrow={`Vista ${rolLabel}`}
+          title="Estadísticas"
+          subtitle="Tu actividad criptográfica detallada."
+          iconImg={ICONO_POR_ROL[user?.rol]}
+          icon={BarChart3}
+          accent="#0A84FF"
+        >
+          <button
+            type="button"
+            onClick={() => nav("/dashboard")}
+            className="btn btn-ghost btn-sm"
+          >
+            <ArrowLeft size={14} /> Dashboard
+          </button>
           <button
             type="button"
             onClick={() => setVersion((v) => v + 1)}
-            className="btn btn-ghost btn-sm shrink-0"
+            className="btn btn-ghost btn-sm"
           >
             <RefreshCcw size={14} /> Refrescar
           </button>
-        </header>
+        </PageHero>
 
         {/* Resumen rápido (chips) */}
         <ResumenChips recetas={recetas} resumen={resumen} rol={user?.rol} userId={user?.id} />
@@ -143,16 +171,14 @@ export default function Estadisticas() {
               <PacienteStats line={line} donut={donut} resumen={resumen} total={recetas.length} />
             )}
             {user?.rol === "medico" && (
-              <MedicoStats bar={bar} donut={donut} top={top} heat={heat} resumen={resumen} total={recetas.length} />
+              <MedicoStats line={line} donut={donut} resumen={resumen} total={recetas.length} />
             )}
             {user?.rol === "farmaceutico" && (
               <FarmaceuticoStats
                 recetas={recetas}
-                line={line}
+                dispensaciones={recetasGrafico}
                 donut={donut}
-                heat={heat}
                 resumen={resumen}
-                userId={user?.id}
               />
             )}
 
@@ -177,7 +203,7 @@ export default function Estadisticas() {
                 subtitle="Recetas con fecha en este mes"
                 dense
               >
-                <MonthlyHeatmap recetas={recetas} color="#0A84FF" />
+                <MonthlyHeatmap recetas={recetasGrafico} color="#0A84FF" />
               </ChartCard>
             </section>
           </>
@@ -254,12 +280,12 @@ function PacienteStats({ line, donut, resumen, total }) {
     <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-w-0">
       <ChartCard
         className="lg:col-span-2"
-        title="Recetas recibidas"
-        subtitle="Últimos 14 días"
+        title="Acuses firmados"
+        subtitle="Últimos 14 días · firmas de dispensación que has hecho"
         delta={resumen.cambio}
-        footer={`Total: ${total}`}
+        footer={`Recetas totales: ${total}`}
       >
-        <LineChart data={line} height={220} color="#0A84FF" yLabel="recetas" />
+        <LineChart data={line} height={220} color="#0A84FF" yLabel="acuses" />
       </ChartCard>
       <ChartCard title="Distribución por estado" subtitle="Total por categoría">
         <DonutChart segments={donut} size={180} thickness={22} centerValue={total} centerLabel="TOTAL" legend="bottom" />
@@ -268,64 +294,58 @@ function PacienteStats({ line, donut, resumen, total }) {
   );
 }
 
-function MedicoStats({ bar, donut, top, heat, resumen, total }) {
+function MedicoStats({ line, donut, resumen, total }) {
   return (
     <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-w-0">
       <ChartCard
         className="lg:col-span-2"
-        title="Emitidas por día"
-        subtitle="Última semana"
+        title="Recetas emitidas"
+        subtitle="Últimos 14 días · 1 punto por emisión"
         delta={resumen.cambio}
-        footer={`Total: ${total}`}
+        footer={`Total emitidas: ${total}`}
       >
-        <BarChart data={bar} height={230} color="#0A84FF" yLabel="recetas" />
+        <LineChart
+          data={line}
+          height={220}
+          color="#0A84FF"
+          fill="rgba(10,132,255,0.18)"
+          yLabel="recetas"
+        />
       </ChartCard>
       <ChartCard title="Estado actual" subtitle="Distribución por etapa">
         <DonutChart segments={donut} size={180} thickness={22} centerValue={total} centerLabel="TOTAL" legend="bottom" />
-      </ChartCard>
-      <ChartCard
-        className="lg:col-span-2"
-        title="Top 5 medicamentos prescritos"
-        subtitle="Solo recetas descifradas en sesión actual"
-      >
-        {top.length === 0 ? (
-          <div className="text-xs text-[color:var(--text-secondary)] py-12 text-center">
-            Sin medicamentos descifrados disponibles.
-          </div>
-        ) : (
-          <BarChart data={top} height={230} color="#00B8D9" yLabel="veces" />
-        )}
-      </ChartCard>
-      <ChartCard title="Actividad" subtitle="12 semanas">
-        <ActivityHeatmap cells={heat} cols={12} color="#0A84FF" />
       </ChartCard>
     </section>
   );
 }
 
-function FarmaceuticoStats({ recetas, donut, heat, resumen, userId }) {
-  const propias = useMemo(() => recetas.filter((r) => r.farmaceutico_id === userId), [recetas, userId]);
-  const lineMias = useMemo(() => lineRecetasUltimos14(propias), [propias]);
+function FarmaceuticoStats({ recetas, dispensaciones, donut, resumen }) {
+  // `dispensaciones` ya viene expandido por el datasetParaFarma — 1 entrada
+  // por dispensación que ÉL hizo. La línea cuenta esas entradas directas,
+  // así un día con 8 dispensaciones suyas aparece como 8, no como 1.
+  const lineMias = useMemo(
+    () => lineRecetasUltimos14(dispensaciones),
+    [dispensaciones],
+  );
   return (
     <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-w-0">
       <ChartCard
         className="lg:col-span-2"
         title="Tus dispensaciones"
-        subtitle="Últimos 14 días"
+        subtitle="Últimos 14 días · 1 punto por acción de dispensación"
         delta={resumen.cambio}
-        footer={`Tuyas: ${propias.length} de ${recetas.length} visibles`}
+        footer={`Total dispensaciones: ${dispensaciones.length} · Recetas tocadas: ${recetas.length}`}
       >
-        <LineChart data={lineMias} height={220} color="#00A870" fill="rgba(0,168,112,0.18)" yLabel="dispensadas" />
+        <LineChart
+          data={lineMias}
+          height={220}
+          color="#00A870"
+          fill="rgba(0,168,112,0.18)"
+          yLabel="dispensaciones"
+        />
       </ChartCard>
       <ChartCard title="Estado del catálogo" subtitle="Recetas visibles">
         <DonutChart segments={donut} size={180} thickness={22} centerValue={recetas.length} centerLabel="VISTAS" legend="bottom" />
-      </ChartCard>
-      <ChartCard
-        className="lg:col-span-3"
-        title="Mapa de actividad (semanas)"
-        subtitle="12 semanas · todas las recetas tocadas"
-      >
-        <ActivityHeatmap cells={heat} cols={18} color="#00A870" />
       </ChartCard>
     </section>
   );
