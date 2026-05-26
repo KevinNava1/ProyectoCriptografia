@@ -117,6 +117,17 @@ export default function TicketsDispensacion() {
     }
   };
 
+  // Cuando se recarga la lista de recetas (botón Refrescar bumpea `version`),
+  // re-sincronizar el objeto `selected` con la versión fresca — si no, el
+  // cripto_ok / motivo_no_verificada visibles quedan congelados del momento
+  // en que se hizo click. Match por id; si la receta ya no existe en la lista
+  // (filtros del rol, etc.) se preserva la actual para no patear al usuario.
+  useEffect(() => {
+    if (!selected) return;
+    const fresh = recetas.find((x) => x.id === selected.id);
+    if (fresh && fresh !== selected) setSelected(fresh);
+  }, [recetas, selected]);
+
   const back = () => {
     setSelected(null);
     setEventos([]);
@@ -160,10 +171,14 @@ export default function TicketsDispensacion() {
         >
           <button
             type="button"
-            onClick={() => setVersion((v) => v + 1)}
+            onClick={() => {
+              setVersion((v) => v + 1);
+              if (selected) pickReceta(selected);
+            }}
             className="btn btn-ghost btn-sm"
+            disabled={loadingRec || loadingEv}
           >
-            <RefreshCcw size={14} /> Refrescar
+            <RefreshCcw size={14} className={loadingRec || loadingEv ? "animate-spin" : ""} /> Refrescar
           </button>
         </PageHero>
 

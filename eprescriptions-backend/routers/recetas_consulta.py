@@ -12,6 +12,7 @@ contenido aparecen como `(cifrado)` para señalar que no podemos exponerlos.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Optional
 
@@ -75,7 +76,14 @@ def consultar_recetas_paciente(
             medico and medico.pub_ec_pem
             and ecdsa_verify(medico.pub_ec_pem, r_bytes, r.firma_doctor)
         )
-        out.append(hidratar(r, contenido, db, firma_medico_ok=firma_ok))
+        # Verificación adicional: SHA3-256(R) recomputado vs `hash_sha3_hex`
+        # guardado. Redundante con la firma (que ya integra SHA3-256), pero
+        # detecta tampering directo al campo identificador en BD.
+        hash_recomp = hashlib.sha3_256(r_bytes).hexdigest()
+        hash_ok = hash_recomp == (r.hash_sha3_hex or "").strip().lower()
+        out.append(
+            hidratar(r, contenido, db, firma_medico_ok=firma_ok, hash_ok=hash_ok)
+        )
 
     audit_log(
         db,
@@ -192,9 +200,12 @@ def consultar_recetas_farmaceutico(
             medico and medico.pub_ec_pem
             and ecdsa_verify(medico.pub_ec_pem, r_bytes, r.firma_doctor)
         )
+        hash_recomp = hashlib.sha3_256(r_bytes).hexdigest()
+        hash_ok = hash_recomp == (r.hash_sha3_hex or "").strip().lower()
         out.append(hidratar(
             r, contenido, db,
             firma_medico_ok=firma_ok,
+            hash_ok=hash_ok,
             farmaceutico_propio_id=user.id,
         ))
     return out
@@ -237,7 +248,11 @@ def listar_recetas_pendientes(
             medico and medico.pub_ec_pem
             and ecdsa_verify(medico.pub_ec_pem, r_bytes, r.firma_doctor)
         )
-        out.append(hidratar(r, contenido, db, firma_medico_ok=firma_ok))
+        hash_recomp = hashlib.sha3_256(r_bytes).hexdigest()
+        hash_ok = hash_recomp == (r.hash_sha3_hex or "").strip().lower()
+        out.append(
+            hidratar(r, contenido, db, firma_medico_ok=firma_ok, hash_ok=hash_ok)
+        )
     return out
 
 
@@ -359,7 +374,11 @@ def recetas_dispensables_por_paciente(
             medico and medico.pub_ec_pem
             and ecdsa_verify(medico.pub_ec_pem, r_bytes, r.firma_doctor)
         )
-        out.append(hidratar(r, contenido, db, firma_medico_ok=firma_ok))
+        hash_recomp = hashlib.sha3_256(r_bytes).hexdigest()
+        hash_ok = hash_recomp == (r.hash_sha3_hex or "").strip().lower()
+        out.append(
+            hidratar(r, contenido, db, firma_medico_ok=firma_ok, hash_ok=hash_ok)
+        )
     return out
 
 
@@ -408,4 +427,6 @@ def consultar_receta_por_id(
         medico and medico.pub_ec_pem
         and ecdsa_verify(medico.pub_ec_pem, r_bytes, r.firma_doctor)
     )
-    return hidratar(r, contenido, db, firma_medico_ok=firma_ok)
+    hash_recomp = hashlib.sha3_256(r_bytes).hexdigest()
+    hash_ok = hash_recomp == (r.hash_sha3_hex or "").strip().lower()
+    return hidratar(r, contenido, db, firma_medico_ok=firma_ok, hash_ok=hash_ok)

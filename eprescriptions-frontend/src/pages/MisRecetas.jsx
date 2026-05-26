@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Filter, Pill } from 'lucide-react'
+import { Filter, Pill, RefreshCcw } from 'lucide-react'
 import PageTransition from '../components/ui/PageTransition'
 import RxTemplate from '../components/ui/RxTemplate'
 import LoadingPulse from '../components/ui/LoadingPulse'
@@ -41,6 +41,9 @@ export default function MisRecetas() {
   // demás se difuminen para enfocar la vista. flippedId es el id que está
   // mostrando el reverso; null = nada flipped.
   const [flippedId, setFlippedId] = useState(null)
+  // Bumpear `version` re-dispara el useEffect de fetch — usado por el botón
+  // Refrescar para repedir las recetas con sus flags cripto_ok actuales.
+  const [version, setVersion] = useState(0)
 
   useEffect(() => {
     if (!user) return
@@ -58,7 +61,7 @@ export default function MisRecetas() {
     }
     load()
     return () => { cancelled = true }
-  }, [user])
+  }, [user, version])
 
   // Filtro por estado + búsqueda de texto libre (medicamento, médico, estado,
   // instrucciones, nº de receta).
@@ -104,7 +107,19 @@ export default function MisRecetas() {
           subtitle="Voltea cada tarjeta para ver la firma cripto del médico."
           iconImg={iconPillBottle}
           accent="#0A84FF"
-        />
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setFlippedId(null)
+              setVersion((v) => v + 1)
+            }}
+            className="btn btn-ghost btn-sm"
+            disabled={loading}
+          >
+            <RefreshCcw size={14} className={loading ? "animate-spin" : ""} /> Refrescar
+          </button>
+        </PageHero>
 
         {/* Toolbar — buscador + filtros por estado */}
         <div className="flex items-center justify-between flex-wrap gap-3">

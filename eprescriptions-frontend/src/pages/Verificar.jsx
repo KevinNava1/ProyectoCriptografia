@@ -5,7 +5,7 @@ import {
   KeyRound, ShieldCheck, ShieldAlert, Pill, Stethoscope, Stamp,
   Copy, Check, FileKey2, ChevronRight, Fingerprint, Calendar,
   Hourglass, ArrowLeft, User, Download, Sparkles, Hash, Lock,
-  SkipForward, Play, FileLock2,
+  SkipForward, Play, FileLock2, RefreshCcw,
 } from 'lucide-react'
 import imgTeam from '../assets/login/team.png'
 import imgMachine from '../assets/login/machine.png'
@@ -46,9 +46,11 @@ export default function Verificar() {
   const [selectedEv, setSelectedEv] = useState(null)
   const [verif, setVerif] = useState(null)
   const [phase, setPhase] = useState('idle') // idle | running | done | error
+  const [version, setVersion] = useState(0)
 
   useEffect(() => {
     (async () => {
+      setLoadingRec(true)
       try {
         const { data } = await recetasAPI.porPaciente(user.id)
         setRecetas(data || [])
@@ -56,7 +58,33 @@ export default function Verificar() {
         toast.error(err?.uiMessage || 'No se pudieron cargar tus recetas')
       } finally { setLoadingRec(false) }
     })()
-  }, [user.id])
+  }, [user.id, version])
+
+  // Re-sincroniza el `selectedReceta` con la versión fresca tras refrescar,
+  // para que el flag cripto_ok / motivo_no_verificada de la cabecera se
+  // actualice si el admin (o tampering) cambió la receta en BD.
+  useEffect(() => {
+    if (!selectedReceta) return
+    const fresh = recetas.find(x => x.id === selectedReceta.id)
+    if (fresh && fresh !== selectedReceta) setSelectedReceta(fresh)
+  }, [recetas, selectedReceta])
+
+  const refrescar = async () => {
+    setVersion(v => v + 1)
+    if (selectedReceta) {
+      setLoadingEv(true)
+      try {
+        const { data } = await dispensacionTicketsAPI.porReceta(selectedReceta.id)
+        setEventos(data || [])
+        if (selectedEv) {
+          const fresh = (data || []).find(e => e.id === selectedEv.id)
+          if (fresh) setSelectedEv(fresh)
+        }
+      } catch (err) {
+        toast.error(err?.uiMessage || 'No se pudieron cargar las dispensaciones')
+      } finally { setLoadingEv(false) }
+    }
+  }
 
   const pickReceta = async (r) => {
     setSelectedReceta(r); setSelectedEv(null); setVerif(null); setPhase('idle')
@@ -95,7 +123,16 @@ export default function Verificar() {
           subtitle="La verificación es por dispensación, no por receta. Selecciona una receta y luego la dispensación que quieres validar."
           iconImg={iconFingerprint}
           accent="#0A84FF"
-        />
+        >
+          <button
+            type="button"
+            onClick={refrescar}
+            className="btn btn-ghost btn-sm"
+            disabled={loadingRec || loadingEv}
+          >
+            <RefreshCcw size={14} className={loadingRec || loadingEv ? 'animate-spin' : ''} /> Refrescar
+          </button>
+        </PageHero>
 
         <Breadcrumb
           receta={selectedReceta}

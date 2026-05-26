@@ -21,6 +21,7 @@ o re-empaquetamos DER, la verificación se cae.
 from __future__ import annotations
 
 import base64
+import binascii
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
@@ -49,11 +50,18 @@ def ecdsa_verify(pub_pem: str, message: bytes, sig_b64: str) -> bool:
     # Devuelve bool, no excepción: muchos call-sites quieren guardar el
     # resultado en `firma_ok=True/False` y mostrarlo en la UI sin que un
     # InvalidSignature haga 500.
+    #
+    # `validate=True` en b64decode: sin esto, Python descarta SILENCIOSAMENTE
+    # cualquier char fuera del alfabeto base64 (whitespace, \n, !@#, etc.) —
+    # un atacante podría inyectar basura en la firma persistida y la
+    # decodificación seguiría dando los mismos bytes → verify pasaría. Con
+    # validate=True cualquier char inválido levanta binascii.Error.
     try:
         pub = serialization.load_pem_public_key(pub_pem.encode())
-        pub.verify(base64.b64decode(sig_b64), message, ec.ECDSA(hashes.SHA3_256()))
+        sig_bytes = base64.b64decode(sig_b64, validate=True)
+        pub.verify(sig_bytes, message, ec.ECDSA(hashes.SHA3_256()))
         log_verify(_ALG, len(message), True, "verificación de firma")
         return True
-    except (InvalidSignature, ValueError, TypeError):
+    except (InvalidSignature, ValueError, TypeError, binascii.Error):
         log_verify(_ALG, len(message), False, "verificación de firma")
         return False

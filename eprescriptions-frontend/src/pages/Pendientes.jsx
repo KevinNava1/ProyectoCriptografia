@@ -16,6 +16,7 @@ import {
   ShieldAlert,
   QrCode,
   CheckCircle,
+  RefreshCcw,
 } from "lucide-react";
 import ShieldLogo from "../components/3d/ShieldLogo";
 import PageTransition from "../components/ui/PageTransition";
@@ -210,6 +211,29 @@ export default function Pendientes() {
     setPhase("idle");
   };
 
+  // Refrescar lo que esté visible: picked > último resultado > último query.
+  // No tira un re-fetch ciego porque la página es búsqueda-driven, no listado.
+  const refrescar = async () => {
+    if (picked) {
+      try {
+        const { data } = await recetasAPI.porId(picked.id);
+        setPicked(data);
+        setRecetas([data]);
+      } catch (err) {
+        toast.error(err?.uiMessage || "No se pudo recargar la receta.");
+      }
+      return;
+    }
+    if (recetas.length > 0 && mode === "id" && queryId.trim()) {
+      return buscarPorId();
+    }
+    if (recetas.length > 0 && mode === "usuario") {
+      toast.info("Re-selecciona el paciente para refrescar sus recetas.");
+      return;
+    }
+    toast.info("Nada que refrescar — busca primero una receta.");
+  };
+
   return (
     <PageTransition>
       <div className="space-y-6">
@@ -219,7 +243,16 @@ export default function Pendientes() {
           subtitle="Busca por ID o por usuario del paciente."
           iconImg={iconAmbulance}
           accent="#0A84FF"
-        />
+        >
+          <button
+            type="button"
+            onClick={refrescar}
+            className="btn btn-ghost btn-sm"
+            disabled={searching}
+          >
+            <RefreshCcw size={14} className={searching ? "animate-spin" : ""} /> Refrescar
+          </button>
+        </PageHero>
 
         {/* Selector de modo */}
         <div className="flex gap-2 flex-wrap">

@@ -22,6 +22,7 @@ import {
   Download,
   FileBadge,
   User,
+  RefreshCcw,
 } from "lucide-react";
 import PageTransition from "../components/ui/PageTransition";
 import SecureCard from "../components/ui/SecureCard";
@@ -258,8 +259,17 @@ export default function Dashboard() {
     <PageTransition>
       <div className="space-y-6 min-w-0">
         {/* HERO */}
-        <section ref={register("hero")} className="min-w-0">
+        <section ref={register("hero")} className="min-w-0 relative">
           <HeroCard firstName={firstName} user={user} docInitials={docInitials} stats={stats} />
+          <button
+            type="button"
+            onClick={() => setRefreshTick((t) => t + 1)}
+            className="btn btn-ghost btn-sm absolute top-3 right-3 z-10"
+            disabled={loading || certsLoading}
+            title="Refrescar datos"
+          >
+            <RefreshCcw size={14} className={loading || certsLoading ? "animate-spin" : ""} /> Refrescar
+          </button>
         </section>
 
         {error && (

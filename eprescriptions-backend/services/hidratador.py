@@ -24,6 +24,7 @@ def hidratar(
     db: Session,
     firma_medico_ok: bool | None = None,
     farmaceutico_propio_id: int | None = None,
+    hash_ok: bool | None = None,
 ) -> RecetaDescifrada:
     medico = db.query(Usuario).filter(Usuario.id == r.medico_id).first()
     paciente = db.query(Usuario).filter(Usuario.id == r.paciente_id).first()
@@ -38,9 +39,11 @@ def hidratar(
     # NO devolvemos los campos sensibles del contenido descifrado. Defensa
     # primaria — quien llame al API directo (curl, fork del front) tampoco
     # ve nada útil de una receta manipulada. Solo metadatos del AAD pasan.
-    # firma_medico_ok=None significa "endpoint no podía verificar" (p.ej.
-    # médico que no descifra), no "verificación falló" — ese caso pasa.
-    cripto_ok = firma_medico_ok is not False
+    # firma_medico_ok=None / hash_ok=None significan "endpoint no podía
+    # verificar ese flag" (p.ej. médico que no descifra) — esos casos pasan.
+    firma_falla = firma_medico_ok is False
+    hash_falla = hash_ok is False
+    cripto_ok = not (firma_falla or hash_falla)
     if cripto_ok:
         medicamento = contenido["medicamento"]
         dosis = contenido["dosis"]
@@ -56,14 +59,30 @@ def hidratar(
         cantidad = 0
         instrucciones = ""
         fecha = contenido.get("fecha_creacion", contenido.get("fecha", ""))
-        motivo_no_verificada = (
-            "La firma digital ECDSA P-256 + SHA3-256 del médico emisor no "
-            "coincide con el contenido descifrado de esta receta. Esto indica "
-            "que el documento pudo haber sido alterado posteriormente a su "
-            "emisión. Por motivos de seguridad, absténgase de utilizar esta "
-            "prescripción y contacte a su médico tratante o al equipo de "
-            "soporte de SecureRx."
-        )
+        if firma_falla and hash_falla:
+            motivo_no_verificada = (
+                "La firma ECDSA P-256 + SHA3-256 del médico Y la huella "
+                "SHA3-256 almacenada no coinciden con el contenido descifrado "
+                "de esta receta. La receta fue alterada en la base de datos. "
+                "Absténgase de utilizar esta prescripción y contacte al "
+                "equipo de soporte de SecureRx."
+            )
+        elif hash_falla:
+            motivo_no_verificada = (
+                "La huella SHA3-256 almacenada (`hash_sha3_hex`) no coincide "
+                "con el hash recomputado sobre el contenido descifrado. La "
+                "fila fue modificada después de la emisión. Absténgase de "
+                "utilizar esta prescripción y contacte al soporte de SecureRx."
+            )
+        else:
+            motivo_no_verificada = (
+                "La firma digital ECDSA P-256 + SHA3-256 del médico emisor no "
+                "coincide con el contenido descifrado de esta receta. Esto indica "
+                "que el documento pudo haber sido alterado posteriormente a su "
+                "emisión. Por motivos de seguridad, absténgase de utilizar esta "
+                "prescripción y contacte a su médico tratante o al equipo de "
+                "soporte de SecureRx."
+            )
 
     # ISO de la última dispensación — el front del farma lo usa para que sus
     # charts/calendar muestren la fecha de la ACCIÓN, no la de creación.
