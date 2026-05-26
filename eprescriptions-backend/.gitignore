@@ -12,6 +12,7 @@ venv/
 ca/                # CA interna (priv y cert root, on-first-boot)
 admin_keys/        # bundle PEM del admin generado por bootstrap_admin
 certs/             # cert auto-firmado de nginx (TLS 1.3 local)
+_test_users_out/   # llaves privadas de usuarios de prueba
 *.pem
 *.key
 

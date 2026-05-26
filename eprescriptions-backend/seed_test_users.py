@@ -32,7 +32,9 @@ USUARIOS = [
     ("admin",        "admin",            "Administrador General",  "admin@securerx.app"),
     ("medico",       "dr.lopez",         "Dr. Carlos Lopez",       "medico@securerx.app"),
     ("paciente",     "juan.perez",       "Juan Perez Garcia",      "paciente@securerx.app"),
+    ("paciente",     "maria.gomez",      "Maria Gomez Ruiz",       "maria.gomez@securerx.app"),
     ("farmaceutico", "farmacia.central", "Farmacia Central",       "farmaceutico@securerx.app"),
+    ("farmaceutico", "farmacia.norte",   "Farmacia del Norte",     "farmacia.norte@securerx.app"),
 ]
 
 
